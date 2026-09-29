@@ -1,0 +1,2587 @@
+<title>Trilha Criativa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: fixed 240px sidebar + 72px top bar + 32px-padded workspace; contextual action bar docks to the bottom of the workspace. */
+:root {
+  --bg: #F6F5F2;
+  --surface: #FFFFFF;
+  --surface-2: #F1F0EC;
+  --border: #E3E1DA;
+  --border-strong: #CBC8BF;
+  --text: #1E2027;
+  --text-2: #464953;
+  --text-3: #686B74;
+  --accent: #4338CA;
+  --accent-hover: #3730A3;
+  --accent-soft: #EEEFFD;
+  --accent-text: #3730A3;
+  --on-accent: #FFFFFF;
+  --fact: #0B6E66;
+  --fact-soft: #E3F3F0;
+  --fact-border: #9FD3CB;
+  --ai: #8A5800;
+  --ai-soft: #FBF2DE;
+  --ai-border: #E9C98A;
+  --question: #0B5F8F;
+  --question-soft: #E4F1F9;
+  --question-border: #9ECBE6;
+  --warn: #B4400D;
+  --warn-soft: #FEF0E7;
+  --danger: #B42318;
+  --danger-soft: #FCEBE9;
+  --success: #15703A;
+  --success-soft: #E6F4EB;
+  --discard: #72757D;
+  --discard-soft: #EFEEEA;
+  --overlay: rgba(22, 22, 30, 0.44);
+  --shadow: 0 1px 2px rgba(24, 24, 36, 0.05);
+  --shadow-lg: 0 16px 48px rgba(24, 24, 36, 0.18);
+  --slide-bg: #FFFFFF;
+  --slide-ink: #1E2027;
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --r: 12px;
+  --r-sm: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141519; --surface: #1C1D22; --surface-2: #24252B; --border: #32343C; --border-strong: #454852;
+    --text: #ECEDF0; --text-2: #C4C6CC; --text-3: #9B9EA6;
+    --accent: #8C90F6; --accent-hover: #A5A8F8; --accent-soft: #25274A; --accent-text: #B5B8FB; --on-accent: #14152B;
+    --fact: #57C7B8; --fact-soft: #15302C; --fact-border: #2C5E57;
+    --ai: #E4B75E; --ai-soft: #302713; --ai-border: #65512A;
+    --question: #71BCE8; --question-soft: #142936; --question-border: #2C5572;
+    --warn: #F29A66; --warn-soft: #382216; --danger: #F28B82; --danger-soft: #3A1D1B;
+    --success: #6FD295; --success-soft: #16301F; --discard: #9B9EA6; --discard-soft: #25262B;
+    --overlay: rgba(0, 0, 0, 0.62); --shadow: 0 1px 2px rgba(0,0,0,.3); --shadow-lg: 0 16px 48px rgba(0,0,0,.5);
+    --slide-bg: #F7F6F2; --slide-ink: #1E2027;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141519; --surface: #1C1D22; --surface-2: #24252B; --border: #32343C; --border-strong: #454852;
+  --text: #ECEDF0; --text-2: #C4C6CC; --text-3: #9B9EA6;
+  --accent: #8C90F6; --accent-hover: #A5A8F8; --accent-soft: #25274A; --accent-text: #B5B8FB; --on-accent: #14152B;
+  --fact: #57C7B8; --fact-soft: #15302C; --fact-border: #2C5E57;
+  --ai: #E4B75E; --ai-soft: #302713; --ai-border: #65512A;
+  --question: #71BCE8; --question-soft: #142936; --question-border: #2C5572;
+  --warn: #F29A66; --warn-soft: #382216; --danger: #F28B82; --danger-soft: #3A1D1B;
+  --success: #6FD295; --success-soft: #16301F; --discard: #9B9EA6; --discard-soft: #25262B;
+  --overlay: rgba(0, 0, 0, 0.62); --shadow: 0 1px 2px rgba(0,0,0,.3); --shadow-lg: 0 16px 48px rgba(0,0,0,.5);
+  --slide-bg: #F7F6F2; --slide-ink: #1E2027;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+button, input, textarea, select { font: inherit; color: inherit; }
+h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.boot { padding: 48px; color: var(--text-3); }
+
+/* Shell */
+.app { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100%; }
+.sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 24px; padding: 20px 16px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px; }
+.brand-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--text); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.brand-name { font-weight: 700; letter-spacing: -0.01em; }
+.brand-sub { font-size: 11px; color: var(--text-3); }
+.nav-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); padding: 0 8px; margin-bottom: 6px; }
+.nav-list { display: flex; flex-direction: column; gap: 2px; list-style: none; margin: 0; padding: 0; }
+.nav-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; background: transparent; border-radius: var(--r-sm); cursor: pointer; text-align: left; color: var(--text-2); font-weight: 500; }
+.nav-item:hover { background: var(--surface-2); color: var(--text); }
+.nav-item[aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); }
+.nav-item .stage-num { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; font-size: 11px; color: var(--text-3); flex: none; font-variant-numeric: tabular-nums; }
+.nav-item .stage-num.done { background: var(--text); border-color: var(--text); color: var(--bg); }
+.nav-item .stage-num.current { border: 2px solid var(--accent); color: var(--accent-text); font-weight: 700; }
+.nav-item .nav-meta { margin-left: auto; font-size: 11px; color: var(--text-3); }
+.job-ctx { border: 1px solid var(--border); border-radius: var(--r); padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--bg); }
+.job-ctx-title { font-weight: 600; font-size: 13px; }
+.job-ctx-client { font-size: 12px; color: var(--text-3); }
+.sidebar-foot { margin-top: auto; font-size: 11px; color: var(--text-3); padding: 0 8px; }
+
+.main { display: flex; flex-direction: column; min-width: 0; }
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 32px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.crumbs { display: flex; align-items: center; gap: 8px; color: var(--text-3); min-width: 0; flex-wrap: wrap; }
+.crumbs button { background: none; border: 0; padding: 2px 4px; cursor: pointer; color: var(--text-2); border-radius: 6px; }
+.crumbs button:hover { color: var(--text); text-decoration: underline; }
+.crumbs .here { color: var(--text); font-weight: 600; }
+.top-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+.saved { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; font-weight: 600; font-size: 12px; }
+.content { padding: 32px; flex: 1; min-width: 0; }
+.content-inner { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+/* Page header */
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.page-head-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 680px; }
+.eyebrow { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3); }
+h1 { font-size: 24px; line-height: 1.25; font-weight: 700; letter-spacing: -0.015em; }
+h2 { font-size: 16px; font-weight: 600; }
+h3 { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.lede { color: var(--text-2); max-width: 65ch; }
+.muted { color: var(--text-3); }
+.small { font-size: 12px; }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: var(--r-sm); border: 1px solid transparent; font-weight: 600; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .12s, border-color .12s, color .12s; }
+.btn-sm { height: 30px; padding: 0 10px; font-size: 12px; }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+.btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
+.btn-tertiary { background: transparent; color: var(--text-2); }
+.btn-tertiary:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover:not(:disabled) { filter: brightness(0.93); }
+.btn-ai { background: var(--ai-soft); color: var(--ai); border-color: var(--ai-border); }
+.btn-ai:hover:not(:disabled) { filter: brightness(0.97); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-wrap { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; position: relative; }
+.btn-reason { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--text-3); max-width: 280px; white-space: normal; line-height: 1.35; }
+.icon-btn { width: 30px; height: 30px; padding: 0; border-radius: 6px; border: 1px solid transparent; background: transparent; color: var(--text-2); display: inline-grid; place-items: center; cursor: pointer; }
+.icon-btn:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Badges */
+.badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid transparent; white-space: nowrap; }
+.badge svg { flex: none; }
+.b-fact { background: var(--fact-soft); color: var(--fact); border-color: var(--fact-border); }
+.b-ai { background: var(--ai-soft); color: var(--ai); border-color: var(--ai-border); border-style: dashed; }
+.b-question { background: var(--question-soft); color: var(--question); border-color: var(--question-border); }
+.b-human { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.b-edited { background: var(--accent-soft); color: var(--accent-text); border-color: var(--accent); }
+.b-warn { background: var(--warn-soft); color: var(--warn); }
+.b-danger { background: var(--danger-soft); color: var(--danger); }
+.b-discard { background: var(--discard-soft); color: var(--discard); border: 1px dashed var(--discard); }
+.b-neutral { background: var(--surface-2); color: var(--text-2); border-color: var(--border); }
+.b-success { background: var(--success-soft); color: var(--success); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+
+/* Cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
+.card-pad { padding: 20px; }
+.item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.item.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.item.is-discarded { background: var(--discard-soft); border: 1px dashed var(--discard); box-shadow: none; }
+.item.is-discarded .item-text { color: var(--discard); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+.item.is-new { border-color: var(--ai-border); }
+.item-text { font-size: 15px; line-height: 1.5; color: var(--text); }
+.item-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.item-note { font-size: 12px; color: var(--text-3); }
+.divider { height: 1px; background: var(--border); border: 0; margin: 0; }
+.human-note { border-left: 3px solid var(--accent); padding: 8px 12px; background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 13px; }
+.human-note strong { color: var(--accent-text); font-weight: 600; }
+.prev-text { font-size: 13px; color: var(--text-3); background: var(--surface-2); padding: 8px 12px; border-radius: 8px; }
+
+/* Forms */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .label { font-weight: 600; font-size: 13px; }
+.hint { font-size: 12px; color: var(--text-3); }
+.error-text { font-size: 12px; color: var(--danger); display: inline-flex; gap: 4px; align-items: center; }
+.input, .textarea, .select { width: 100%; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 8px 12px; min-height: 38px; }
+.textarea { resize: vertical; line-height: 1.55; }
+.input:focus, .textarea:focus, .select:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.input.invalid, .textarea.invalid { border-color: var(--danger); }
+.search { position: relative; }
+.search .input { padding-left: 34px; }
+.search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.check { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; font-size: 13px; color: var(--text-2); }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+
+/* Tabs & segmented */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.tab { background: none; border: 0; padding: 10px 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; cursor: pointer; font-weight: 600; color: var(--text-3); display: inline-flex; gap: 6px; align-items: center; }
+.tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.tab .count { font-size: 12px; background: var(--surface-2); border-radius: 999px; padding: 0 7px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.segmented { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 2px; background: var(--surface); }
+.segmented button { border: 0; background: transparent; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; color: var(--text-3); display: inline-flex; gap: 6px; align-items: center; }
+.segmented button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); }
+
+/* Grids */
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start; }
+.sticky-col { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.stack-16 { display: flex; flex-direction: column; gap: 16px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.between { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* Progress */
+.progress { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+.progress > span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.pct { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 12px; }
+
+/* Jobs list */
+.job-table { display: flex; flex-direction: column; }
+.job-row { display: grid; grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.job-row:last-child { border-bottom: 0; }
+.job-row:hover { background: var(--bg); }
+.job-row.head { cursor: default; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); font-weight: 600; padding-block: 10px; }
+.job-row.head:hover { background: transparent; }
+.job-name { font-weight: 600; }
+.job-client { font-size: 12px; color: var(--text-3); }
+.cell-label { display: none; }
+
+/* Feedback */
+.empty { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--text-2); }
+.empty-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--surface-2); display: grid; place-items: center; color: var(--text-3); }
+.empty h3 { font-size: 16px; color: var(--text); }
+.alert { display: flex; gap: 12px; padding: 12px 14px; border-radius: var(--r-sm); border: 1px solid; font-size: 13px; align-items: flex-start; }
+.alert-warn { background: var(--warn-soft); border-color: var(--warn); color: var(--text); }
+.alert-warn > svg { color: var(--warn); }
+.alert-error { background: var(--danger-soft); border-color: var(--danger); color: var(--text); }
+.alert-error > svg { color: var(--danger); }
+.alert-info { background: var(--surface-2); border-color: var(--border); color: var(--text-2); }
+.alert-ok { background: var(--success-soft); border-color: var(--success); color: var(--text); }
+.alert-ok > svg { color: var(--success); }
+.spinner { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.steps li { display: flex; gap: 10px; align-items: center; color: var(--text-3); }
+.steps li.active { color: var(--text); font-weight: 600; }
+.steps li.done { color: var(--text-2); }
+.step-dot { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+.steps li.done .step-dot { background: var(--success); border-color: var(--success); color: #fff; }
+
+/* Toasts */
+.toast-stack { position: fixed; right: 24px; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; z-index: 80; max-width: min(380px, calc(100vw - 32px)); }
+.toast { background: var(--text); color: var(--bg); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px; align-items: flex-start; box-shadow: var(--shadow-lg); font-size: 13px; animation: rise .18s ease-out; }
+.toast.warn { background: var(--warn-soft); color: var(--text); border: 1px solid var(--warn); }
+.toast.warn svg { color: var(--warn); }
+.toast button { margin-left: auto; background: none; border: 0; color: inherit; cursor: pointer; opacity: .7; padding: 0; }
+@keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Overlays */
+.overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 60; display: grid; place-items: center; padding: 24px; }
+.modal { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-lg); width: min(560px, 100%); max-height: calc(100vh - 48px); display: flex; flex-direction: column; border: 1px solid var(--border); }
+.modal.wide { width: min(880px, 100%); }
+.modal-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 20px 20px 12px; }
+.modal-head h2 { font-size: 17px; }
+.modal-body { padding: 4px 20px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.modal-foot { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.panel-overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 60; display: flex; justify-content: flex-end; }
+.panel { width: min(440px, 100%); height: 100%; background: var(--surface); border-left: 1px solid var(--border); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+.panel .modal-body { flex: 1; }
+
+/* Context bar */
+.context-bar { position: sticky; bottom: 0; z-index: 15; background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -6px 20px rgba(20,20,30,.06); padding: 14px 32px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.context-inner { max-width: 1180px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.context-inner strong { font-weight: 700; }
+
+/* Analysis */
+.evidence-text { font-size: 13px; line-height: 1.7; color: var(--text-2); white-space: pre-wrap; }
+mark.m-fact { background: var(--fact-soft); color: var(--text); border-bottom: 2px solid var(--fact); padding: 1px 2px; border-radius: 3px; }
+mark.m-ai { background: var(--ai-soft); color: var(--text); border-bottom: 2px dashed var(--ai); padding: 1px 2px; border-radius: 3px; }
+.counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.count-card { border: 1px solid var(--border); border-radius: var(--r); padding: 12px 16px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
+.count-card .n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Material */
+.section-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
+.section-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.section-toggle { display: flex; align-items: center; gap: 10px; background: none; border: 0; cursor: pointer; padding: 0; text-align: left; flex: 1; min-width: 0; }
+.section-body { padding: 0 16px 16px; }
+.sum-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sum-list li { display: flex; flex-direction: column; gap: 2px; }
+.sum-sec { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+
+/* Combinations */
+.chips { display: flex; flex-direction: column; gap: 6px; }
+.chip { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 6px 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); }
+.chip .k { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; flex: none; min-width: 84px; }
+.combo-card.is-chosen { border: 2px solid var(--accent); padding: 15px; }
+.chosen-flag { display: flex; align-items: center; gap: 8px; color: var(--accent-text); font-weight: 700; font-size: 13px; }
+
+/* Paths */
+.dl { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; font-size: 13px; margin: 0; }
+.dl dt { color: var(--text-3); font-weight: 600; font-size: 12px; }
+.dl dd { margin: 0; color: var(--text-2); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface); }
+.cmp { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 13px; }
+.cmp th, .cmp td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.cmp thead th { background: var(--bg); }
+.cmp tbody th { color: var(--text-3); font-weight: 600; font-size: 12px; width: 140px; }
+.cmp tr:last-child td, .cmp tr:last-child th { border-bottom: 0; }
+
+/* Finalists */
+.score { display: inline-flex; gap: 4px; }
+.score button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); cursor: pointer; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.score button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.rank { width: 28px; height: 28px; border-radius: 50%; background: var(--text); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+
+/* Presentation */
+.pres { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 520px) minmax(240px, 304px); gap: 16px; align-items: start; }
+.block-list { list-style: none; margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.block-item { border: 1px solid transparent; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.block-item[data-selected="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.block-item.hidden-block { opacity: .6; }
+.block-select { background: none; border: 0; text-align: left; padding: 0; cursor: pointer; display: flex; gap: 8px; align-items: baseline; width: 100%; }
+.block-select .pos { font-variant-numeric: tabular-nums; color: var(--text-3); font-size: 12px; width: 18px; flex: none; }
+.block-select .t { font-weight: 600; font-size: 13px; }
+.block-tools { display: flex; gap: 2px; align-items: center; padding-left: 26px; flex-wrap: wrap; }
+.slide { aspect-ratio: 16 / 9; max-width: 100%; background: var(--slide-bg); color: var(--slide-ink); border: 1px solid var(--border-strong); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; }
+.slide .s-eyebrow { font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: #6B6E76; }
+.slide .s-title { font-size: 15px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.slide .s-body { font-size: 9.5px; line-height: 1.5; color: #3F424B; overflow: hidden; }
+.slide .s-num { position: absolute; right: 12px; bottom: 10px; font-size: 8px; color: #6B6E76; font-variant-numeric: tabular-nums; }
+.slide .s-hidden { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(247,246,242,.82); font-weight: 600; font-size: 12px; color: #464953; }
+.versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.versions li { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.versions li.current { border-color: var(--accent); }
+.proposal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.proposal-col { border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.proposal-col.ai { border: 1px dashed var(--ai-border); background: var(--ai-soft); }
+.chip-btn { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--text-2); }
+.chip-btn:hover { background: var(--surface-2); }
+
+/* Summary */
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tl-item { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); align-items: center; }
+.tl-item:last-child { border-bottom: 0; }
+.tl-dot { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; font-size: 11px; color: var(--text-3); }
+.tl-dot.done { background: var(--text); color: var(--bg); border-color: var(--text); }
+.tl-dot.current { border: 2px solid var(--accent); color: var(--accent-text); }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.log li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; }
+.log-icon { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; flex: none; }
+.log-icon.human { background: var(--accent); color: var(--on-accent); }
+.log-icon.ai { background: var(--ai-soft); color: var(--ai); border: 1px dashed var(--ai-border); }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.legend li { display: flex; flex-direction: column; gap: 4px; }
+
+@media (max-width: 1240px) {
+  .pres { grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); }
+  .pres > :last-child { grid-column: 1 / -1; }
+  .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1080px) {
+  .split { grid-template-columns: minmax(0, 1fr); }
+  .sticky-col { position: static; }
+}
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); gap: 16px; }
+  .stage-nav .nav-list { flex-direction: row; overflow-x: auto; }
+  .stage-nav .nav-item { white-space: nowrap; }
+  .sidebar-foot { margin-top: 0; }
+  .topbar { height: auto; min-height: 60px; padding: 12px 16px; position: static; }
+  .content { padding: 20px 16px; }
+  .context-bar { padding-inline: 16px; }
+  .grid-2, .grid-3, .counts, .pres, .proposal-grid { grid-template-columns: minmax(0, 1fr); }
+  .pres > :last-child { grid-column: auto; }
+  .job-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .job-row.head { display: none; }
+  .cell-label { display: inline; color: var(--text-3); font-size: 12px; margin-right: 6px; }
+  .dl { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+</style>
+
+<div id="root"><p class="boot">Carregando o protótipo…</p></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useId, useMemo } = React;
+
+/* ------------------------------------------------------------------ */
+/* Icons                                                               */
+/* ------------------------------------------------------------------ */
+const ICONS = {
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  plus: '<path d="M5 12h14M12 5v14"/>',
+  arrowRight: '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  arrowLeft: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
+  arrowUp: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  arrowDown: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
+  chevronDown: '<path d="m6 9 6 6 6-6"/>',
+  chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
+  trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
+  eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/>',
+  copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/><path d="M19 16v5M16.5 18.5h5"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+  alert: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+  alertCircle: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+  help: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  layers: '<path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  columns: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/>',
+  star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"/>',
+  briefcase: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  paperclip: '<path d="m21.4 11-9.2 9.2a6 6 0 0 1-8.5-8.5l8.6-8.6A4 4 0 1 1 18 8.8l-8.6 8.6a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
+  branch: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M6 9v6M18 9a9 9 0 0 1-9 9"/>',
+  refresh: '<path d="M21 12a9 9 0 0 1-15.7 6L3 16"/><path d="M3 21v-5h5M3 12a9 9 0 0 1 15.7-6L21 8"/><path d="M21 3v5h-5"/>',
+  monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/>',
+  lightbulb: '<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2Z"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
+  message: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  cloudCheck: '<path d="M17.5 19H9a7 7 0 1 1 6.7-9h1.8a4.5 4.5 0 1 1 0 9Z"/><path d="m9 14 2 2 4-4"/>',
+};
+function Icon({ name, size = 16, className = "" }) {
+  return <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[name] || "" }} />;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mock data                                                           */
+/* ------------------------------------------------------------------ */
+const BRIEF = "Brisa é um chá gaseificado sem álcool, vendido em lata, com lançamento nacional previsto para o próximo verão. A comunicação deve começar pelas principais capitais brasileiras e priorizar ocasiões sociais noturnas, encontros entre amigos e canais digitais. O produto combina bolhas, sabor adulto e uma embalagem elegante. A campanha deve evitar um tom moralista contra bebidas alcoólicas e não deve representar quem escolhe não beber como alguém afastado da experiência social.";
+const JOB_META = {
+  client: "Brisa",
+  name: "Lançamento Brisa",
+  product: "Chá gaseificado sem álcool, em lata",
+  challenge: "Tornar Brisa uma escolha desejável para encontros sociais em que a pessoa quer participar do ritual, mas não beber álcool.",
+  audience: "Adultos de 25 a 35 anos, urbanos, socialmente ativos e interessados em bem estar sem isolamento social.",
+  message: "Você não precisa sair do clima para escolher não beber.",
+};
+
+const STAGES = [
+  { id: "briefing", label: "Briefing", icon: "file" },
+  { id: "analysis", label: "Análise", icon: "lightbulb" },
+  { id: "material", label: "Matéria prima", icon: "layers" },
+  { id: "combos", label: "Combinações", icon: "branch" },
+  { id: "paths", label: "Caminhos", icon: "flag" },
+  { id: "finalists", label: "Finalistas", icon: "star" },
+  { id: "presentation", label: "Apresentação", icon: "monitor" },
+];
+const SCREEN_TITLES = {
+  jobs: "Jobs", new: "Novo job", briefing: "Briefing", summary: "Resumo do job", analysis: "Análise do briefing",
+  material: "Matéria prima", combos: "Combinações", paths: "Caminhos criativos", finalists: "Finalistas", presentation: "Apresentação",
+};
+
+const SECTIONS = [
+  { id: "audience", label: "Público", roles: true, hint: "Quem precisa ser tocado. Defina um primário antes de adicionar secundários." },
+  { id: "truth", label: "Verdade humana", hint: "Uma observação sobre comportamento ou contexto." },
+  { id: "tension", label: "Tensão humana", roles: true, hint: "O conflito entre o que a pessoa quer e o que vive." },
+  { id: "brand", label: "Marca", hint: "O que só Brisa tem." },
+  { id: "category", label: "Categoria", hint: "Códigos da categoria para usar ou quebrar." },
+  { id: "mechanism", label: "Mecanismo criativo", hint: "O recurso que transforma material em ideia. Opcional, no máximo um por combinação." },
+];
+const SECTION_LABEL = Object.fromEntries(SECTIONS.map((s) => [s.id, s.label]));
+
+const ALT_POOL = {
+  audience: ["Grupos de amigos em que ao menos uma pessoa não bebe.", "Quem sai à noite e volta cedo para treinar no dia seguinte."],
+  truth: ["Ter algo na mão faz parte de estar na conversa.", "Ninguém lembra o que você bebeu, lembra se você estava lá."],
+  tension: ["Quero brindar junto sem fingir que estou bebendo.", "Quero sair até tarde sem pagar a conta no dia seguinte."],
+  brand: ["Um nome que soa como pausa, não como regra.", "O som da lata abrindo é igual ao de qualquer outra."],
+  category: ["Rótulos sem álcool falam mais de ausência do que de sabor.", "Bebidas de verão vendem calor, praia e excesso."],
+  mechanism: ["Trocar o 'não, obrigado' por um gesto que não pede explicação.", "Contar a noite só pelo que acontece entre os brindes."],
+};
+
+const EXTRA_PATHS = [
+  { title: "Brinde sem legenda", premise: "A campanha mostra brindes reais e nunca legenda o que está em cada copo.", execution: "Fotos e vídeos de brindes em bares e casas das capitais, sem texto sobre a bebida. Brisa aparece como mais um copo levantado.", tone: "Documental, discreto.", pieces: ["Série de fotos para OOH", "Posts sem legenda", "Painel em bares parceiros"], risks: "Pode ficar sutil demais sem uma assinatura forte de marca." },
+  { title: "A lata no centro da roda", premise: "A lata de Brisa vira o objeto que circula pela roda e junta as pessoas.", execution: "Um plano-sequência acompanha a lata passando de mão em mão durante a noite, sem ninguém perguntar o que tem dentro.", tone: "Divertido, ágil.", pieces: ["Filme de 30s em plano-sequência", "Vídeo vertical de 15s", "Embalagem de edição limitada"], risks: "A lata pode parecer o assunto, o que vai contra a ideia de não virar pauta." },
+];
+
+function nowLabel() {
+  const d = new Date();
+  return "Hoje, " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+let uid = 100;
+const newId = (p) => p + "-" + ++uid;
+
+function makeAnalysis(resumed) {
+  const s = (confirmed) => (resumed && confirmed ? "confirmed" : "pending");
+  return [
+    { id: "f1", kind: "fact", text: "O lançamento terá foco inicial em capitais brasileiras.", quote: "A comunicação deve começar pelas principais capitais brasileiras", status: s(true) },
+    { id: "f2", kind: "fact", text: "A comunicação deve priorizar ocasiões sociais noturnas e canais digitais.", quote: "priorizar ocasiões sociais noturnas, encontros entre amigos e canais digitais", status: s(true) },
+    { id: "f3", kind: "fact", text: "O lançamento nacional está previsto para o próximo verão.", quote: "com lançamento nacional previsto para o próximo verão", status: s(false) },
+    { id: "f4", kind: "fact", text: "A campanha deve evitar um tom moralista contra bebidas alcoólicas.", quote: "A campanha deve evitar um tom moralista contra bebidas alcoólicas", status: s(true) },
+    { id: "h1", kind: "hyp", text: "A recusa ao álcool pode gerar sensação de deslocamento social.", quote: "não deve representar quem escolhe não beber como alguém afastado da experiência social", status: s(true) },
+    { id: "h2", kind: "hyp", text: "O produto pode ganhar relevância ao ocupar o ritual do brinde, sem atacar a bebida alcoólica.", quote: "evitar um tom moralista contra bebidas alcoólicas", status: s(true) },
+    { id: "h3", kind: "hyp", text: "A embalagem elegante pode posicionar Brisa como bebida de ocasião, e não de dieta.", quote: "uma embalagem elegante", status: "pending" },
+    { id: "q1", kind: "question", text: "O produto será servido em bares ou apenas vendido no varejo?", why: "Muda onde a campanha acontece: no balcão do bar ou na geladeira de casa.", status: "open" },
+    { id: "q2", kind: "question", text: "Existe alguma restrição regulatória adicional para a campanha?", why: "O briefing não cita regras para bebidas gaseificadas nem para uso de influenciadores.", status: "open" },
+  ];
+}
+
+function makeMaterials(resumed) {
+  const r = (x) => (resumed ? x : { selected: false, role: null });
+  return [
+    { id: "m1", section: "audience", text: "Adultos que reduziram o álcool sem abandonar a vida social.", origin: "ai", ...r({ selected: true, role: "primary" }) },
+    { id: "m2", section: "audience", text: "Anfitriões que querem que todos participem do brinde.", origin: "ai", ...r({ selected: true, role: "secondary" }) },
+    { id: "m3", section: "truth", text: "Pertencer costuma parecer mais fácil quando todos repetem o mesmo ritual.", origin: "ai", ...r({ selected: true, role: null }) },
+    { id: "m4", section: "truth", text: "Ninguém quer virar o assunto da mesa por causa do que está bebendo.", origin: "ai", selected: false, role: null },
+    resumed
+      ? { id: "m5", section: "tension", text: "Quero fazer uma escolha melhor sem precisar explicá-la.", origin: "ai", edited: true, prevText: "Quero cuidar de mim sem ter que me justificar.", selected: true, role: "primary" }
+      : { id: "m5", section: "tension", text: "Quero fazer uma escolha melhor sem precisar explicá-la.", origin: "ai", selected: false, role: null },
+    { id: "m6", section: "brand", text: "Bolhas, sabor adulto e lata elegante.", origin: "brief", ...r({ selected: true, role: null }) },
+    { id: "m7", section: "category", text: "O brinde como símbolo de participação.", origin: "ai", ...r({ selected: true, role: null }) },
+    { id: "m8", section: "category", text: "Bebidas sem álcool costumam ser apresentadas como escolha de saúde.", origin: "ai", selected: false, role: null },
+    { id: "m9", section: "mechanism", text: "Reenquadrar a escolha sem álcool como presença, não ausência.", origin: "ai", ...r({ selected: true, role: null }) },
+    { id: "m10", section: "mechanism", text: "Mostrar a noite pelo ponto de vista da lata.", origin: "ai", selected: false, role: null },
+  ];
+}
+
+function snap(materials, ids) {
+  return ids.map((id) => {
+    const m = materials.find((x) => x.id === id);
+    return { id, section: m.section, text: m.text, origin: m.origin, edited: !!m.edited };
+  });
+}
+function makeCombos(materials, resumed) {
+  return [
+    { id: "c1", title: "Presença sem explicação", synthesis: "Brisa deixa a pessoa dentro do ritual do grupo sem que a escolha vire assunto.", components: snap(materials, ["m3", "m5", "m6", "m7"]), origin: "ai", round: 1, state: resumed ? "chosen" : "proposed" },
+    { id: "c2", title: "O mesmo brinde, outra escolha", synthesis: "O brinde continua coletivo. Só o conteúdo do copo muda.", components: snap(materials, ["m3", "m6", "m7", "m9"]), origin: "ai", round: 1, state: "proposed" },
+    { id: "c3", title: "A noite continua leve", synthesis: "Sem ressaca de explicação: a noite segue no mesmo ritmo para todos.", components: snap(materials, ["m5", "m6", "m9"]), origin: "ai", round: 1, state: "proposed" },
+  ];
+}
+
+function basePaths(source) {
+  return [
+    { id: "p1", title: "Sem discurso", premise: "Pessoas trocam naturalmente a bebida durante uma noite, sem transformar a escolha em assunto.", execution: "Filme e cortes para redes acompanham uma noite entre amigos. Em algum momento alguém troca o copo por uma Brisa e ninguém comenta. A câmera nunca destaca a troca.", tone: "Observacional, leve, sem lição de moral.", pieces: ["Filme de 30s", "Série de cortes para Reels", "Ativação em bares parceiros"], risks: "A troca pode passar despercebida demais e o produto sumir da cena.", source, origin: "ai", finalist: false, discarded: false },
+    { id: "p2", title: "Ainda estou dentro", premise: "Pequenos momentos mostram que não beber não significa deixar a experiência.", execution: "Sequência de micro-momentos: a foto do grupo, a piada interna, o brinde. Em todos, a pessoa com Brisa está no centro da cena, não na borda.", tone: "Caloroso, cúmplice, urbano.", pieces: ["Carrossel de momentos", "OOH noturno nas capitais", "Filtro de foto de grupo"], risks: "Pode soar como justificativa se o texto explicar demais.", source, origin: "ai", finalist: false, discarded: false },
+    { id: "p3", title: "Brinde ao seu jeito", premise: "Diferentes escolhas compartilham o mesmo ritual de celebração.", execution: "Um brinde coletivo em que cada copo é diferente, e a lata de Brisa entra no mesmo gesto e no mesmo som.", tone: "Celebrativo, inclusivo, sonoro.", pieces: ["Assinatura sonora do brinde", "Vídeo vertical de 15s", "Kit de brinde para eventos"], risks: "O brinde é território disputado por marcas de cerveja e pode parecer genérico.", source, origin: "ai", finalist: false, discarded: false },
+  ];
+}
+
+const DEFAULT_EVAL = {
+  p1: { strategy: 4, distinction: 5, fit: 5, flexibility: 3, risks: "A troca pode passar despercebida demais. Precisamos garantir que a lata apareça sem virar o foco.", comment: "O mais corajoso. Conversa direto com a tensão de não querer explicar a escolha." },
+  p2: { strategy: 5, distinction: 3, fit: 5, flexibility: 5, risks: "Pode soar como justificativa se o texto explicar demais.", comment: "O mais seguro e o mais fácil de desdobrar em digital e OOH." },
+};
+const CRITERIA = [
+  { id: "strategy", label: "Força estratégica" },
+  { id: "distinction", label: "Distinção" },
+  { id: "fit", label: "Aderência ao briefing" },
+  { id: "flexibility", label: "Flexibilidade" },
+];
+
+/* The one complete demonstration job. Only this factory produces Brisa content. */
+function makeJob(resumed) {
+  const materials = makeMaterials(resumed);
+  return {
+    id: "brisa",
+    demo: true,
+    updatedAt: resumed ? "Hoje, 11:24" : nowLabel(),
+    files: [{ name: "Guia de marca Brisa.pdf", size: "2,4 MB" }],
+    name: JOB_META.name,
+    client: JOB_META.client,
+    brief: BRIEF,
+    briefVersion: 1,
+    analyzed: true,
+    analysis: makeAnalysis(resumed),
+    materials,
+    altIndex: {},
+    combos: makeCombos(materials, resumed),
+    comboRound: 1,
+    paths: resumed ? basePaths("Presença sem explicação") : [],
+    pathRounds: resumed ? 1 : 0,
+    finalistOrder: [],
+    evals: {},
+    recommendation: { text: "Recomendamos Sem discurso como caminho principal, com Ainda estou dentro como alternativa para digital e OOH.", author: "ai" },
+    presentations: [],
+    currentPres: null,
+    decisions: resumed ? [
+      { text: "Escolheu a combinação “Presença sem explicação”", stage: "Combinações", at: "Hoje, 11:20" },
+      { text: "Editou a tensão humana “Quero fazer uma escolha melhor sem precisar explicá-la.”", stage: "Matéria prima", at: "Hoje, 10:58" },
+      { text: "Definiu o público primário", stage: "Matéria prima", at: "Hoje, 10:51" },
+      { text: "Confirmou 3 fatos e 2 hipóteses", stage: "Análise", at: "Ontem, 18:12" },
+    ] : [],
+    aiLog: resumed ? [
+      { text: "Gerou 3 caminhos a partir de “Presença sem explicação”", stage: "Caminhos", at: "Hoje, 11:24" },
+      { text: "Propôs 3 combinações a partir da matéria prima selecionada", stage: "Combinações", at: "Hoje, 11:02" },
+      { text: "Analisou o briefing: 4 fatos, 3 hipóteses e 2 dúvidas", stage: "Análise", at: "Ontem, 17:40" },
+    ] : [],
+  };
+}
+
+/* A new job: only what the user entered. Every later stage starts empty. */
+function makeDraftJob(form) {
+  return {
+    id: newId("job"),
+    demo: false,
+    updatedAt: nowLabel(),
+    name: form.name.trim(),
+    client: form.client.trim(),
+    brief: form.brief,
+    files: form.files.map((f) => ({ ...f })),
+    briefVersion: 1,
+    analyzed: false,
+    analysis: [],
+    materials: [],
+    altIndex: {},
+    combos: [],
+    comboRound: 0,
+    paths: [],
+    pathRounds: 0,
+    finalistOrder: [],
+    evals: {},
+    recommendation: { text: "", author: "user" },
+    presentations: [],
+    currentPres: null,
+    decisions: [{ text: "Criou o job como rascunho", stage: "Briefing", at: nowLabel() }],
+    aiLog: [],
+  };
+}
+const EMPTY_FORM = { name: "", client: "", brief: "", files: [] };
+const SAMPLE_FORM = {
+  name: "Projeto teste",
+  client: "Aurora Café",
+  brief: "Aurora Café vai lançar uma linha de cold brew em garrafa para consumo no trabalho. A comunicação deve falar com profissionais de 28 a 40 anos que trabalham em modelo híbrido e querem uma pausa sem sair da rotina.",
+  files: [],
+};
+
+/* ------------------------------------------------------------------ */
+/* Rules derived from the job                                         */
+/* ------------------------------------------------------------------ */
+function materialCheck(materials) {
+  const live = materials.filter((m) => !m.discarded);
+  const has = (sec, pred) => live.some((m) => m.section === sec && pred(m));
+  const warnings = [];
+  if (!has("audience", (m) => m.role === "primary")) warnings.push("Defina um público primário.");
+  if (!has("truth", (m) => m.selected) && !has("tension", (m) => m.role)) warnings.push("Selecione ao menos uma verdade ou tensão humana.");
+  if (!has("brand", (m) => m.selected) && !has("category", (m) => m.selected)) warnings.push("Selecione ao menos um elemento de marca ou de categoria.");
+  const info = [];
+  if (live.filter((m) => m.section === "mechanism" && m.selected).length > 1) info.push("Mais de um mecanismo selecionado. Cada combinação usa no máximo um.");
+  if (!has("mechanism", (m) => m.selected)) info.push("Mecanismo criativo é opcional.");
+  return { ok: warnings.length === 0, warnings, info };
+}
+function isUsed(m) {
+  return !!(m.selected || m.role);
+}
+function jobProgress(job) {
+  if (!job.analyzed) return job.brief.trim() ? 5 : 0;
+  if (job.presentations.length) return 92;
+  if (job.finalistOrder.length >= 2) return 80;
+  if (job.paths.length) return 68;
+  if (job.combos.some((c) => c.state === "chosen")) return 50;
+  if (materialCheck(job.materials).ok) return 35;
+  if (job.analysis.some((i) => i.status === "confirmed")) return 20;
+  return 10;
+}
+function stageStatus(job) {
+  const s = {};
+  if (!job.analyzed) {
+    STAGES.forEach((x) => { s[x.id] = "todo"; });
+    s.briefing = "current";
+    return s;
+  }
+  s.briefing = "done";
+  s.analysis = job.analysis.some((i) => i.status === "confirmed") ? "done" : "current";
+  s.material = s.analysis === "done" ? (materialCheck(job.materials).ok ? "done" : "current") : "todo";
+  s.combos = s.material === "done" ? (job.combos.some((c) => c.state === "chosen") ? "done" : "current") : "todo";
+  s.paths = s.combos === "done" ? (job.paths.length && job.finalistOrder.length ? "done" : "current") : "todo";
+  s.finalists = s.paths === "done" ? (job.presentations.length ? "done" : "current") : "todo";
+  s.presentation = job.presentations.length ? "current" : "todo";
+  return s;
+}
+function currentStageLabel(job) {
+  const st = stageStatus(job);
+  const cur = STAGES.find((x) => st[x.id] === "current");
+  return cur ? (cur.id === "paths" ? "Caminhos criativos" : cur.label) : "Apresentação";
+}
+
+/* ------------------------------------------------------------------ */
+/* Reusable UI                                                         */
+/* ------------------------------------------------------------------ */
+function Button({ variant = "secondary", size, icon, iconRight, children, reason, reasonInline, className = "", ...rest }) {
+  const id = useId();
+  const disabled = !!reason || rest.disabled;
+  const btn = (
+    <button type="button" {...rest} disabled={disabled} aria-describedby={reason ? id : undefined} title={reason || rest.title} className={`btn btn-${variant}${size === "sm" ? " btn-sm" : ""} ${className}`}>
+      {icon && <Icon name={icon} size={size === "sm" ? 14 : 16} />}
+      {children}
+      {iconRight && <Icon name={iconRight} size={size === "sm" ? 14 : 16} />}
+    </button>
+  );
+  if (!reason) return btn;
+  return (
+    <span className="btn-wrap">
+      {btn}
+      <span id={id} className={reasonInline ? "btn-reason" : "sr-only"}>
+        {reasonInline && <Icon name="info" size={13} />}
+        {reason}
+      </span>
+    </span>
+  );
+}
+function IconButton({ icon, label, ...rest }) {
+  return (
+    <button type="button" className="icon-btn" aria-label={label} title={label} {...rest}>
+      <Icon name={icon} size={16} />
+    </button>
+  );
+}
+function Badge({ tone = "neutral", icon, children }) {
+  return (
+    <span className={`badge b-${tone}`}>
+      {icon && <Icon name={icon} size={12} />}
+      {children}
+    </span>
+  );
+}
+const ORIGINS = {
+  brief: { tone: "fact", icon: "file", label: "Fato do briefing" },
+  fact: { tone: "fact", icon: "file", label: "Fato do briefing" },
+  hyp: { tone: "ai", icon: "sparkles", label: "Hipótese da IA" },
+  ai: { tone: "ai", icon: "sparkles", label: "Sugestão da IA" },
+  question: { tone: "question", icon: "help", label: "Dúvida da IA" },
+  user: { tone: "edited", icon: "user", label: "Criado por você" },
+};
+function OriginBadge({ origin, label }) {
+  const o = ORIGINS[origin] || ORIGINS.ai;
+  return <Badge tone={o.tone} icon={o.icon}>{label || o.label}</Badge>;
+}
+function HumanBadge({ children, icon = "check" }) {
+  return <Badge tone="human" icon={icon}>{children}</Badge>;
+}
+function EditedBadge() {
+  return <Badge tone="edited" icon="pencil">Editado por você</Badge>;
+}
+function DiscardedBadge() {
+  return <Badge tone="discard" icon="undo">Descartado · recuperável</Badge>;
+}
+function ProgressBar({ value, label }) {
+  return (
+    <div className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
+      <div className="progress" style={{ flex: 1 }} role="progressbar" aria-valuenow={value} aria-valuemin="0" aria-valuemax="100" aria-label={label || "Progresso"}>
+        <span style={{ width: value + "%" }} />
+      </div>
+      <span className="pct">{value}%</span>
+    </div>
+  );
+}
+function EmptyState({ icon = "layers", title, children, action }) {
+  return (
+    <div className="empty">
+      <div className="empty-icon"><Icon name={icon} size={22} /></div>
+      <h3>{title}</h3>
+      {children && <p className="lede" style={{ maxWidth: "48ch" }}>{children}</p>}
+      {action}
+    </div>
+  );
+}
+function Alert({ tone = "info", icon, title, children, action }) {
+  const ic = icon || { warn: "alert", error: "alertCircle", info: "info", ok: "check" }[tone];
+  return (
+    <div className={`alert alert-${tone}`} role={tone === "error" ? "alert" : undefined}>
+      <Icon name={ic} size={18} />
+      <div className="stack" style={{ gap: 4, flex: 1 }}>
+        {title && <strong>{title}</strong>}
+        {children && <div>{children}</div>}
+        {action}
+      </div>
+    </div>
+  );
+}
+function PageHead({ eyebrow, title, lede, actions, children }) {
+  return (
+    <div className="page-head">
+      <div className="page-head-text">
+        {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+        <h1>{title}</h1>
+        {lede && <p className="lede">{lede}</p>}
+        {children}
+      </div>
+      {actions && <div className="head-actions">{actions}</div>}
+    </div>
+  );
+}
+function Tabs({ tabs, value, onChange, label }) {
+  return (
+    <div className="tabs" role="tablist" aria-label={label}>
+      {tabs.map((t) => (
+        <button key={t.id} role="tab" type="button" className="tab" aria-selected={value === t.id} onClick={() => onChange(t.id)}>
+          {t.icon && <Icon name={t.icon} size={14} />}
+          {t.label}
+          {t.count != null && <span className="count">{t.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+function Segmented({ options, value, onChange, label }) {
+  return (
+    <div className="segmented" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.id} type="button" aria-pressed={value === o.id} onClick={() => onChange(o.id)}>
+          {o.icon && <Icon name={o.icon} size={14} />}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function useEscape(active, onClose) {
+  useEffect(() => {
+    if (!active) return;
+    const h = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [active, onClose]);
+}
+function Modal({ title, eyebrow, children, footer, onClose, dismissible = true, wide }) {
+  const titleId = useId();
+  const ref = useRef(null);
+  useEscape(dismissible, onClose);
+  useEffect(() => {
+    const prev = document.activeElement;
+    const first = ref.current && ref.current.querySelector("textarea, input, select, button:not([data-close])");
+    (first || ref.current) && (first || ref.current).focus();
+    return () => { prev && prev.focus && prev.focus(); };
+  }, []);
+  return (
+    <div className="overlay" onMouseDown={(e) => { if (dismissible && e.target === e.currentTarget) onClose(); }}>
+      <div className={`modal${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} tabIndex={-1}>
+        <div className="modal-head">
+          <div className="stack" style={{ gap: 4 }}>
+            {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+            <h2 id={titleId}>{title}</h2>
+          </div>
+          {dismissible && <IconButton icon="x" label="Fechar" data-close onClick={onClose} />}
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-foot">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+function SidePanel({ title, eyebrow, children, footer, onClose }) {
+  const titleId = useId();
+  const ref = useRef(null);
+  useEscape(true, onClose);
+  useEffect(() => { ref.current && ref.current.focus(); }, []);
+  return (
+    <div className="panel-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <aside className="panel" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} tabIndex={-1}>
+        <div className="modal-head">
+          <div className="stack" style={{ gap: 4 }}>
+            {eyebrow && <span className="eyebrow">{eyebrow}</span>}
+            <h2 id={titleId}>{title}</h2>
+          </div>
+          <IconButton icon="x" label="Fechar painel" onClick={onClose} />
+        </div>
+        <div className="modal-body">{children}</div>
+        {footer && <div className="modal-foot">{footer}</div>}
+      </aside>
+    </div>
+  );
+}
+function ConfirmDiscard({ what, detail, onConfirm, onClose, confirmLabel = "Descartar" }) {
+  return (
+    <Modal title="Confirmar descarte" onClose={onClose} footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+      <Button variant="danger" icon="trash" onClick={onConfirm}>{confirmLabel}</Button>
+    </>}>
+      <p>Descartar <strong>{what}</strong>?</p>
+      <Alert tone="info" icon="undo">{detail || "O item sai da lista ativa, mas continua visível como descartado. Você pode restaurá-lo quando quiser."}</Alert>
+    </Modal>
+  );
+}
+function EditModal({ title, label, value, prevNote, onSave, onClose, multiline = true }) {
+  const [v, setV] = useState(value);
+  const id = useId();
+  const changed = v.trim() && v.trim() !== value.trim();
+  return (
+    <Modal title={title} onClose={onClose} footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+      <Button variant="primary" icon="check" reason={changed ? null : "Altere o texto para salvar uma nova versão"} onClick={() => onSave(v.trim())}>Salvar como versão sua</Button>
+    </>}>
+      <div className="field">
+        <label htmlFor={id}>{label}</label>
+        {multiline ? <textarea id={id} className="textarea" rows={4} value={v} onChange={(e) => setV(e.target.value)} /> : <input id={id} className="input" value={v} onChange={(e) => setV(e.target.value)} />}
+      </div>
+      <p className="hint">{prevNote || "A versão anterior fica guardada. O item passa a mostrar “Editado por você”."}</p>
+    </Modal>
+  );
+}
+
+/* Processing overlay: runs steps, then shows done or a recoverable error. */
+function ProcessingModal({ title, steps, failFirst, doneTitle, doneText, doneLabel, onDone, onClose, errorTitle, errorText, preserveNote }) {
+  const [phase, setPhase] = useState("running");
+  const [step, setStep] = useState(0);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    setPhase("running");
+    setStep(0);
+    const timers = steps.map((_, i) => setTimeout(() => setStep(i), i * 650));
+    timers.push(setTimeout(() => setPhase(failFirst && attempt === 0 ? "error" : "done"), steps.length * 650 + 350));
+    return () => timers.forEach(clearTimeout);
+  }, [attempt]);
+  if (phase === "error") {
+    return (
+      <Modal title={errorTitle || "Erro de geração"} onClose={onClose} footer={<>
+        <Button variant="secondary" onClick={onClose}>Fechar</Button>
+        <Button variant="primary" icon="refresh" onClick={() => setAttempt((a) => a + 1)}>Tentar novamente</Button>
+      </>}>
+        <Alert tone="error" title="O processamento não terminou.">{errorText}</Alert>
+        <Alert tone="ok" icon="check">{preserveNote || "Nada do que você fez foi perdido. Suas escolhas e textos continuam como estavam."}</Alert>
+      </Modal>
+    );
+  }
+  if (phase === "done") {
+    return (
+      <Modal title={doneTitle} onClose={onClose} footer={<>
+        <Button variant="secondary" onClick={onClose}>Fechar</Button>
+        <Button variant="primary" iconRight="arrowRight" onClick={onDone}>{doneLabel}</Button>
+      </>}>
+        <Alert tone="ok" icon="check">{doneText}</Alert>
+      </Modal>
+    );
+  }
+  return (
+    <Modal title={title} dismissible={false} onClose={() => {}}>
+      <div className="row" style={{ gap: 12 }}>
+        <span className="spinner" aria-hidden="true" />
+        <span aria-live="polite">{steps[step]}…</span>
+      </div>
+      <ol className="steps">
+        {steps.map((s, i) => (
+          <li key={s} className={i < step ? "done" : i === step ? "active" : ""}>
+            <span className="step-dot">{i < step ? <Icon name="check" size={12} /> : <span className="small">{i + 1}</span>}</span>
+            {s}
+          </li>
+        ))}
+      </ol>
+      <p className="hint">Processamento simulado. Esta janela não fecha até terminar.</p>
+    </Modal>
+  );
+}
+
+function Toasts({ toasts, dismiss }) {
+  return (
+    <div className="toast-stack" aria-live="polite" role="status">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast ${t.tone === "warn" ? "warn" : ""}`}>
+          <Icon name={t.tone === "warn" ? "alert" : "check"} size={16} />
+          <span>{t.text}</span>
+          <button type="button" aria-label="Fechar aviso" onClick={() => dismiss(t.id)}><Icon name="x" size={14} /></button>
+        </div>
+      ))}
+    </div>
+  );
+}
+function ContextBar({ children }) {
+  return (
+    <div className="context-bar" role="region" aria-label="Decisão pendente">
+      <div className="context-inner">{children}</div>
+    </div>
+  );
+}
+
+/* Shown on every later stage of a job whose briefing was never analyzed. */
+function NotStartedStage({ title, job, go, openDemo }) {
+  return (
+    <div className="content-inner">
+      <PageHead eyebrow={`${job.client} · ${job.name}`} title={title} />
+      <div className="card">
+        <EmptyState icon="clock" title="Etapa não iniciada" action={
+          <div className="row" style={{ justifyContent: "center" }}>
+            <Button variant="primary" icon="file" onClick={() => go("briefing")}>Voltar ao briefing</Button>
+            <Button variant="secondary" onClick={openDemo}>Abrir demonstração Brisa</Button>
+          </div>
+        }>
+          Este job tem só o briefing. As próximas etapas dependem da análise, que este protótipo ainda não faz para briefings novos. Nada de outro job aparece aqui.
+        </EmptyState>
+      </div>
+    </div>
+  );
+}
+function AnalysisUnavailableModal({ onLoadDemo, onKeepDraft, onBack }) {
+  return (
+    <Modal title="Análise não disponível neste protótipo" eyebrow="Limite do protótipo" onClose={onBack} footer={<>
+      <Button variant="tertiary" onClick={onBack}>Voltar ao briefing</Button>
+      <Button variant="secondary" onClick={onKeepDraft}>Manter como rascunho</Button>
+      <Button variant="primary" iconRight="arrowRight" onClick={onLoadDemo}>Carregar demonstração Brisa</Button>
+    </>}>
+      <p>Este protótipo demonstra o fluxo completo com dados simulados, mas ainda não analisa briefings novos. Você pode manter este job como rascunho ou carregar a demonstração Brisa para explorar as próximas etapas.</p>
+      <Alert tone="info" icon="info">Nos dois casos, este job fica salvo como um rascunho separado, só com o briefing que você escreveu. A demonstração Brisa abre como outro job e não recebe nada deste.</Alert>
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Shell                                                               */
+/* ------------------------------------------------------------------ */
+function Sidebar({ screen, go, job, inJob }) {
+  const st = stageStatus(job);
+  return (
+    <nav className="sidebar" aria-label="Navegação principal">
+      <div className="brand">
+        <div className="brand-mark" aria-hidden="true">T</div>
+        <div>
+          <div className="brand-name">Trilha</div>
+          <div className="brand-sub">Do briefing à apresentação</div>
+        </div>
+      </div>
+      <div>
+        <ul className="nav-list">
+          <li><button type="button" className="nav-item" aria-current={screen === "jobs" ? "page" : undefined} onClick={() => go("jobs")}><Icon name="briefcase" />Jobs</button></li>
+          <li><button type="button" className="nav-item" aria-current={screen === "new" ? "page" : undefined} onClick={() => go("new")}><Icon name="plus" />Novo job</button></li>
+        </ul>
+      </div>
+      {inJob && (
+        <div className="stack-16">
+          <div className="job-ctx">
+            <span className="eyebrow">Job atual</span>
+            <div>
+              <div className="job-ctx-title">{job.name}</div>
+              <div className="job-ctx-client">{job.client}</div>
+            </div>
+            <div className="badges">{job.demo ? <Badge tone="neutral" icon="layers">Demonstração</Badge> : <Badge tone="neutral" icon="file">Rascunho</Badge>}</div>
+            <ProgressBar value={jobProgress(job)} label="Progresso do job" />
+          </div>
+          <div className="stage-nav">
+            <div className="nav-label">Etapas</div>
+            <ul className="nav-list">
+              <li><button type="button" className="nav-item" aria-current={screen === "summary" ? "page" : undefined} onClick={() => go("summary")}><Icon name="home" />Resumo do job</button></li>
+              {STAGES.map((s, i) => (
+                <li key={s.id}>
+                  <button type="button" className="nav-item" aria-current={screen === s.id ? "page" : undefined} onClick={() => go(s.id)}>
+                    <span className={`stage-num ${st[s.id] === "done" ? "done" : st[s.id] === "current" ? "current" : ""}`} aria-hidden="true">
+                      {st[s.id] === "done" ? <Icon name="check" size={11} /> : i + 1}
+                    </span>
+                    {s.label}
+                    <span className="sr-only">{st[s.id] === "done" ? "(concluída)" : st[s.id] === "current" ? "(etapa atual)" : "(não iniciada)"}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      <p className="sidebar-foot">Protótipo de navegação. Dados e IA simulados.</p>
+    </nav>
+  );
+}
+function TopBar({ screen, go, job, inJob, openLegend }) {
+  return (
+    <header className="topbar">
+      <div className="crumbs">
+        <button type="button" onClick={() => go("jobs")}>Jobs</button>
+        {inJob && <><Icon name="chevronRight" size={14} /><button type="button" onClick={() => go("summary")}>{job.name}</button></>}
+        {screen !== "jobs" && screen !== "summary" && <><Icon name="chevronRight" size={14} /><span className="here">{SCREEN_TITLES[screen]}</span></>}
+      </div>
+      <div className="top-actions">
+        {inJob && <span className="saved"><Icon name="cloudCheck" size={14} />Salvo</span>}
+        <Button variant="tertiary" size="sm" icon="info" onClick={openLegend}>Como ler as marcas</Button>
+        <span className="avatar" aria-label="Você">VC</span>
+      </div>
+    </header>
+  );
+}
+function LegendPanel({ onClose }) {
+  return (
+    <SidePanel title="Como ler as marcas" eyebrow="Legenda" onClose={onClose}>
+      <p className="lede">A IA propõe. Você decide. As marcas mostram de onde veio cada conteúdo e quem tomou cada decisão.</p>
+      <ul className="legend">
+        <li><OriginBadge origin="fact" /><span className="small muted">Está escrito no briefing. Sempre tem um trecho de evidência.</span></li>
+        <li><OriginBadge origin="hyp" /><span className="small muted">Inferência da IA. Não está no briefing e precisa da sua decisão.</span></li>
+        <li><OriginBadge origin="ai" /><span className="small muted">Proposta da IA. Nunca é escolhida automaticamente.</span></li>
+        <li><Badge tone="question" icon="help">Em aberto</Badge><span className="small muted">Dúvida sem resposta. Continua visível até você responder.</span></li>
+        <li><HumanBadge>Confirmado por você</HumanBadge><span className="small muted">Decisão humana. Cor sólida, sempre com o seu nome na frase.</span></li>
+        <li><EditedBadge /><span className="small muted">Existe uma versão escrita por você. A anterior fica guardada.</span></li>
+        <li><DiscardedBadge /><span className="small muted">Fora da lista ativa, mas pode ser restaurado.</span></li>
+        <li><Badge tone="warn" icon="alert">Atenção</Badge><span className="small muted">Falta algo para seguir. O botão desabilitado explica o quê.</span></li>
+      </ul>
+    </SidePanel>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 1: Jobs                                                      */
+/* ------------------------------------------------------------------ */
+function JobsScreen({ jobsList, go, openJob, deleteDraft, toast }) {
+  const [q, setQ] = useState("");
+  const [stage, setStage] = useState("all");
+  const [demoEmpty, setDemoEmpty] = useState(false);
+  const [removing, setRemoving] = useState(null);
+  const rows = [
+    ...jobsList.map((j) => ({ id: j.id, client: j.client, name: j.name, stage: currentStageLabel(j), progress: jobProgress(j), updated: j.updatedAt, open: true, kind: j.demo ? "demo" : "draft" })),
+    { id: "ex-lume", client: "Lume", name: "Protetor solar infantil", stage: "Matéria prima", progress: 41, updated: "Seg, 09:30", kind: "example" },
+    { id: "ex-vertice", client: "Vértice Academia", name: "Planos anuais", stage: "Combinações", progress: 50, updated: "Sex, 17:12", kind: "example" },
+    { id: "ex-nuvem", client: "Nuvem Seguros", name: "Seguro para bikes", stage: "Apresentação", progress: 92, updated: "12 mar", kind: "example" },
+  ];
+  const all = demoEmpty ? [] : rows;
+  const filtered = all.filter((j) => (stage === "all" || j.stage === stage) && (j.client + " " + j.name).toLowerCase().includes(q.trim().toLowerCase()));
+  const stageOptions = ["Briefing", "Análise", "Matéria prima", "Combinações", "Caminhos criativos", "Finalistas", "Apresentação"];
+  const kindBadge = (k) => k === "demo" ? <Badge tone="neutral" icon="layers">Demonstração completa</Badge> : k === "draft" ? <Badge tone="neutral" icon="file">Rascunho seu</Badge> : <Badge tone="neutral">Exemplo sem dados</Badge>;
+  return (
+    <div className="content-inner">
+      <PageHead title="Jobs" lede="Seus jobs em andamento. Cada job guarda os próprios dados. A demonstração Brisa mostra o fluxo completo com dados simulados." actions={<Button variant="primary" icon="plus" onClick={() => go("new")}>Criar job</Button>} />
+      <div className="toolbar">
+        <div className="search" style={{ flex: "1 1 280px", maxWidth: 420 }}>
+          <Icon name="search" />
+          <label className="sr-only" htmlFor="job-search">Buscar jobs</label>
+          <input id="job-search" className="input" placeholder="Buscar por cliente ou job" value={q} onChange={(e) => setQ(e.target.value)} />
+        </div>
+        <label className="sr-only" htmlFor="stage-filter">Filtrar por etapa</label>
+        <select id="stage-filter" className="select" style={{ width: 220 }} value={stage} onChange={(e) => setStage(e.target.value)}>
+          <option value="all">Todas as etapas</option>
+          {stageOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <label className="check" style={{ marginLeft: "auto" }}>
+          <input type="checkbox" checked={demoEmpty} onChange={(e) => setDemoEmpty(e.target.checked)} />
+          Demonstrar lista vazia
+        </label>
+      </div>
+      <div className="card">
+        {all.length === 0 ? (
+          <EmptyState icon="briefcase" title="Nenhum job ainda" action={<Button variant="primary" icon="plus" onClick={() => go("new")}>Criar job</Button>}>
+            Cole um briefing bruto para começar. A IA separa fatos, hipóteses e dúvidas, e você decide o que segue.
+          </EmptyState>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="search" title="Nenhum job encontrado" action={<Button variant="secondary" onClick={() => { setQ(""); setStage("all"); }}>Limpar busca e filtro</Button>}>
+            Nenhum job corresponde a “{q || "sua busca"}”{stage !== "all" ? ` na etapa ${stage}` : ""}.
+          </EmptyState>
+        ) : (
+          <div className="job-table" role="table" aria-label="Lista de jobs">
+            <div className="job-row head" role="row">
+              <span role="columnheader">Job</span><span role="columnheader">Etapa atual</span><span role="columnheader">Progresso</span><span role="columnheader">Atualizado</span><span role="columnheader"><span className="sr-only">Ação</span></span>
+            </div>
+            {filtered.map((j) => (
+              <div key={j.id} className="job-row" role="row" onClick={() => j.open && openJob(j.id)}>
+                <span role="cell" className="stack" style={{ gap: 4 }}>
+                  <span className="job-name">{j.client} · {j.name}</span>
+                  <span className="badges">{kindBadge(j.kind)}</span>
+                </span>
+                <span role="cell"><span className="cell-label">Etapa</span><Badge tone={j.open ? "edited" : "neutral"}>{j.stage}</Badge></span>
+                <span role="cell"><ProgressBar value={j.progress} label={`Progresso de ${j.name}`} /></span>
+                <span role="cell" className="small muted"><span className="cell-label">Atualizado</span>{j.updated}</span>
+                <span role="cell" className="row" style={{ flexWrap: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                  {j.kind === "demo" && <Button variant="primary" size="sm" iconRight="arrowRight" onClick={() => openJob(j.id)}>Retomar</Button>}
+                  {j.kind === "draft" && <><Button variant="secondary" size="sm" iconRight="arrowRight" onClick={() => openJob(j.id)}>Abrir</Button><IconButton icon="trash" label={`Excluir rascunho ${j.name}`} onClick={() => setRemoving(j)} /></>}
+                  {j.kind === "example" && <Button variant="secondary" size="sm" reason="Job de exemplo sem dados neste protótipo">Abrir</Button>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {removing && (
+        <ConfirmDiscard what={`o rascunho “${removing.name}”`} confirmLabel="Excluir rascunho" detail="O rascunho sai da lista de jobs. Nenhum outro job é afetado, e a demonstração Brisa continua igual." onClose={() => setRemoving(null)} onConfirm={() => { deleteDraft(removing.id); toast(`Rascunho “${removing.name}” excluído.`); setRemoving(null); }} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 2: New job / Briefing                                        */
+/* ------------------------------------------------------------------ */
+function NewJobScreen({ mode, job, form, setForm, go, toast, createDraft, saveDraft, openDemo, onReanalyzed }) {
+  const isNew = mode === "new";
+  const isDemo = !isNew && job.demo;
+  const [errors, setErrors] = useState({});
+  const [failNext, setFailNext] = useState(false);
+  const [run, setRun] = useState(null);
+  const [limit, setLimit] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const dirty = isNew
+    ? !!(form.name || form.client || form.brief || form.files.length)
+    : form.name !== job.name || form.client !== job.client || form.brief !== job.brief || form.files.length !== job.files.length;
+  const validate = (needBrief) => {
+    const e = {};
+    if (!form.name.trim()) e.name = "Dê um nome ao job.";
+    if (!form.client.trim()) e.client = "Informe o cliente.";
+    if (needBrief && form.brief.trim().length < 40) e.brief = "Cole o briefing bruto (pelo menos algumas frases).";
+    setErrors(e);
+    return !Object.keys(e).length;
+  };
+  // Saves only into this job: a new object for a new job, or the same draft's own object.
+  const persist = () => {
+    if (isNew) return createDraft(form);
+    saveDraft(job.id, form);
+    return job.id;
+  };
+  const save = () => {
+    if (!validate(false)) return;
+    const name = form.name.trim();
+    persist();
+    if (isNew) { toast(`Rascunho “${name}” criado. Ele aparece na lista de jobs.`); go("summary"); }
+    else toast("Alterações salvas neste job.");
+  };
+  const analyze = () => {
+    if (!validate(true)) return;
+    if (isDemo) setRun(Date.now());
+    else setLimit(true);
+  };
+  const cancel = () => {
+    if (isDemo) return go("summary");
+    if (dirty) return setConfirmCancel(true);
+    go(isNew ? "jobs" : "summary");
+  };
+  const discardUnsaved = () => {
+    if (isNew) { setForm({ ...EMPTY_FORM, files: [] }); go("jobs"); }
+    else { setForm({ name: job.name, client: job.client, brief: job.brief, files: job.files.map((f) => ({ ...f })) }); go("summary"); }
+    setConfirmCancel(false);
+  };
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow={isNew ? "Novo job" : isDemo ? "Demonstração · briefing versão 1" : `${job.client} · rascunho`}
+        title={isNew ? "Novo job" : "Briefing"}
+        lede={isNew ? "Cole o briefing como veio do cliente. Um job novo começa vazio: nada de outros jobs é copiado para ele." : isDemo ? "Briefing da demonstração Brisa. Fica somente leitura para manter a análise e as evidências coerentes." : "O briefing deste rascunho. As etapas seguintes continuam vazias até existir uma análise."}
+        actions={isNew && <>
+          <Button variant="secondary" icon="file" onClick={() => { setForm({ ...SAMPLE_FORM, files: [] }); setErrors({}); }}>Preencher com exemplo fictício</Button>
+          <Button variant="tertiary" icon="layers" onClick={() => openDemo()}>Abrir demonstração Brisa</Button>
+        </>}
+      />
+      <div className="split">
+        <div className="card card-pad stack-16">
+          {isDemo && <Alert tone="info" icon="layers" title="Job de demonstração">Os dados da Brisa são simulados e só existem neste job. Nenhum job novo recebe esse conteúdo.</Alert>}
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="f-name">Nome do job</label>
+              <input id="f-name" className={`input${errors.name ? " invalid" : ""}`} value={form.name} readOnly={isDemo} placeholder="Ex.: Projeto teste" onChange={(e) => set("name", e.target.value)} aria-invalid={!!errors.name} />
+              {errors.name && <span className="error-text"><Icon name="alertCircle" size={12} />{errors.name}</span>}
+            </div>
+            <div className="field">
+              <label htmlFor="f-client">Cliente</label>
+              <input id="f-client" className={`input${errors.client ? " invalid" : ""}`} value={form.client} readOnly={isDemo} placeholder="Ex.: Aurora Café" onChange={(e) => set("client", e.target.value)} aria-invalid={!!errors.client} />
+              {errors.client && <span className="error-text"><Icon name="alertCircle" size={12} />{errors.client}</span>}
+            </div>
+          </div>
+          <div className="field">
+            <label htmlFor="f-brief">Briefing bruto</label>
+            <textarea id="f-brief" className={`textarea${errors.brief ? " invalid" : ""}`} rows={10} value={form.brief} readOnly={isDemo} placeholder="Cole aqui o texto do briefing, sem editar." onChange={(e) => set("brief", e.target.value)} aria-invalid={!!errors.brief} />
+            <div className="between">
+              {errors.brief ? <span className="error-text"><Icon name="alertCircle" size={12} />{errors.brief}</span> : <span className="hint">Não corrija o texto. A análise usa exatamente o que estiver aqui como evidência.</span>}
+              <span className="hint">{form.brief.length} caracteres</span>
+            </div>
+          </div>
+          <div className="field">
+            <span className="label">Anexos</span>
+            <div className="stack" style={{ gap: 8 }}>
+              {form.files.length === 0 && <span className="hint">Nenhum anexo.</span>}
+              {form.files.map((f, i) => (
+                <div key={f.name + i} className="between chip">
+                  <span className="row"><Icon name="paperclip" size={14} />{f.name} <span className="muted small">{f.size}</span></span>
+                  {!isDemo && <IconButton icon="x" label={`Remover ${f.name}`} onClick={() => set("files", form.files.filter((_, j) => j !== i))} />}
+                </div>
+              ))}
+              {!isDemo && (
+                <div>
+                  <Button variant="secondary" size="sm" icon="paperclip" onClick={() => set("files", [...form.files, { name: `Anexo ${form.files.length + 1} de ${form.client.trim() || "cliente"}.pdf`, size: "1,1 MB" }])}>Adicionar anexo simulado</Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <hr className="divider" />
+          <div className="between">
+            {isDemo ? (
+              <label className="check">
+                <input type="checkbox" checked={failNext} onChange={(e) => setFailNext(e.target.checked)} />
+                Simular erro na próxima análise
+              </label>
+            ) : <span className="hint">{isNew ? "Nada é salvo até você salvar o rascunho ou analisar." : dirty ? "Há alterações não salvas." : "Tudo salvo neste job."}</span>}
+            <div className="row">
+              <Button variant="tertiary" onClick={cancel}>{isDemo ? "Voltar ao resumo" : "Cancelar"}</Button>
+              {!isDemo && <Button variant="secondary" onClick={save} reason={!isNew && !dirty ? "Nenhuma alteração para salvar" : null}>{isNew ? "Salvar rascunho" : "Salvar alterações"}</Button>}
+              <Button variant="primary" icon="sparkles" onClick={analyze}>{isDemo ? "Reanalisar briefing" : "Analisar briefing"}</Button>
+            </div>
+          </div>
+        </div>
+        <aside className="sticky-col">
+          <div className="card card-pad stack">
+            <h2>O que acontece na análise</h2>
+            <ul className="log">
+              <li><span className="log-icon" style={{ background: "var(--fact-soft)", color: "var(--fact)" }}><Icon name="file" size={13} /></span><span><strong>Fatos</strong> saem do texto e sempre apontam o trecho de origem.</span></li>
+              <li><span className="log-icon ai"><Icon name="sparkles" size={13} /></span><span><strong>Hipóteses</strong> são inferências da IA e ficam marcadas como tal.</span></li>
+              <li><span className="log-icon" style={{ background: "var(--question-soft)", color: "var(--question)" }}><Icon name="help" size={13} /></span><span><strong>Dúvidas</strong> ficam em aberto até você responder.</span></li>
+              <li><span className="log-icon human"><Icon name="user" size={13} /></span><span>Nada segue adiante sem a sua confirmação.</span></li>
+            </ul>
+          </div>
+          {isDemo
+            ? <Alert tone="info" icon="layers" title="Análise simulada">A reanálise da demonstração repete o resultado simulado da Brisa. Ela não lê o texto de verdade.</Alert>
+            : <Alert tone="warn" title="Limite deste protótipo">Só a demonstração Brisa tem análise simulada. Um briefing novo fica salvo como rascunho, sem análise, até existir análise real.</Alert>}
+        </aside>
+      </div>
+      {run && (
+        <ProcessingModal
+          key={run}
+          title="Analisando briefing"
+          steps={["Lendo o briefing", "Separando fatos de hipóteses", "Listando dúvidas em aberto"]}
+          failFirst={failNext}
+          errorTitle="Erro de análise"
+          errorText="Não conseguimos concluir a análise do briefing. Tente de novo em alguns segundos."
+          preserveNote="O briefing e todas as suas decisões na demonstração continuam como estavam."
+          doneTitle="Análise simulada pronta"
+          doneText="Resultado simulado da demonstração Brisa: 4 fatos, 3 hipóteses e 2 dúvidas. Suas confirmações anteriores foram mantidas."
+          doneLabel="Ver resultado"
+          onClose={() => { setRun(null); setFailNext(false); }}
+          onDone={() => { setRun(null); setFailNext(false); onReanalyzed(); }}
+        />
+      )}
+      {limit && (
+        <AnalysisUnavailableModal
+          onBack={() => setLimit(false)}
+          onKeepDraft={() => { const name = form.name.trim(); persist(); setLimit(false); toast(`“${name}” ficou salvo como rascunho, só com o briefing.`); go("summary"); }}
+          onLoadDemo={() => { const name = form.name.trim(); persist(); setLimit(false); openDemo(name); }}
+        />
+      )}
+      {confirmCancel && (
+        <ConfirmDiscard what={isNew ? "este rascunho não salvo" : "as alterações não salvas"} detail={isNew ? "O texto digitado neste formulário será descartado. Jobs salvos, incluindo a demonstração Brisa, não são afetados." : "O briefing volta à última versão salva deste job. Nenhum outro job é afetado."} confirmLabel="Descartar" onClose={() => setConfirmCancel(false)} onConfirm={discardUnsaved} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 3: Analysis                                                  */
+/* ------------------------------------------------------------------ */
+function highlight(text, quote, kind) {
+  if (!quote) return text;
+  const i = text.indexOf(quote);
+  if (i < 0) return text;
+  return <>{text.slice(0, i)}<mark className={kind === "fact" ? "m-fact" : "m-ai"}>{quote}</mark>{text.slice(i + quote.length)}</>;
+}
+function AnalysisScreen({ job, update, go, toast, decide, openDemo }) {
+  const [tab, setTab] = useState("fact");
+  const [focusId, setFocusId] = useState("f1");
+  const [editing, setEditing] = useState(null);
+  const [discarding, setDiscarding] = useState(null);
+  const [answering, setAnswering] = useState(null);
+  const [showPrev, setShowPrev] = useState({});
+  if (!job.analyzed) return <NotStartedStage title="Análise do briefing" job={job} go={go} openDemo={openDemo} />;
+  const items = job.analysis;
+  const of = (k) => items.filter((i) => i.kind === k);
+  const setItem = (id, patch) => update((j) => ({ ...j, analysis: j.analysis.map((i) => (i.id === id ? { ...i, ...patch } : i)) }));
+  const confirmedCount = items.filter((i) => i.status === "confirmed").length;
+  const openQ = of("question").filter((i) => i.status === "open").length;
+  const focus = items.find((i) => i.id === focusId);
+  const tabs = [
+    { id: "fact", label: "Fatos", icon: "file", count: of("fact").length },
+    { id: "hyp", label: "Hipóteses", icon: "sparkles", count: of("hyp").length },
+    { id: "question", label: "Dúvidas", icon: "help", count: of("question").length },
+  ];
+  const statusBadge = (it) => {
+    if (it.status === "discarded") return <DiscardedBadge />;
+    if (it.kind === "question") return it.status === "answered" ? <HumanBadge icon="message">Respondida por você</HumanBadge> : <Badge tone="question" icon="help">Em aberto</Badge>;
+    if (it.status === "confirmed") return <HumanBadge>Confirmado por você</HumanBadge>;
+    return <Badge tone="neutral" icon="clock">Aguardando sua decisão</Badge>;
+  };
+  const continueReason = confirmedCount ? null : "Confirme ao menos um fato ou hipótese para continuar";
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow={`${job.client} · briefing versão ${job.briefVersion}`}
+        title="Análise do briefing"
+        lede="A IA leu o briefing e separou o que está escrito do que ela está supondo. Confirme o que vale, corrija o que precisar e responda as dúvidas."
+        actions={<Button variant="primary" iconRight="arrowRight" reason={continueReason} reasonInline onClick={() => { go("material"); }}>Continuar com itens confirmados</Button>}
+      />
+      <div className="counts">
+        <div className="count-card"><span className="row"><OriginBadge origin="fact" /></span><span className="n">{of("fact").length}</span><span className="small muted">{of("fact").filter((i) => i.status === "confirmed").length} confirmados por você</span></div>
+        <div className="count-card"><span className="row"><OriginBadge origin="hyp" /></span><span className="n">{of("hyp").length}</span><span className="small muted">{of("hyp").filter((i) => i.status === "confirmed").length} confirmadas por você</span></div>
+        <div className="count-card"><span className="row"><Badge tone="question" icon="help">Dúvidas</Badge></span><span className="n">{of("question").length}</span><span className="small muted">{openQ} ainda em aberto</span></div>
+      </div>
+      <div className="split">
+        <div className="stack-16">
+          <Tabs tabs={tabs} value={tab} onChange={setTab} label="Tipos de item" />
+          <div className="stack" role="tabpanel">
+            {tab === "hyp" && <Alert tone="info" icon="sparkles">Hipóteses são inferências da IA. Não estão escritas no briefing e só seguem adiante se você confirmar.</Alert>}
+            {tab === "question" && openQ > 0 && <Alert tone="warn" title={`${openQ} ${openQ === 1 ? "dúvida continua" : "dúvidas continuam"} em aberto`}>Você pode seguir sem responder, mas elas ficam visíveis no resumo do job até terem resposta.</Alert>}
+            {of(tab).map((it) => (
+              <article key={it.id} className={`item${it.status === "discarded" ? " is-discarded" : ""}${focusId === it.id && it.kind !== "question" ? " is-selected" : ""}`}>
+                <div className="between">
+                  <div className="badges">
+                    <OriginBadge origin={it.kind === "fact" ? "fact" : it.kind === "hyp" ? "hyp" : "question"} />
+                    {it.edited && <EditedBadge />}
+                  </div>
+                  {statusBadge(it)}
+                </div>
+                <p className="item-text">{it.text}</p>
+                {it.kind === "question" && <p className="item-note">Por que importa: {it.why}</p>}
+                {it.answer && <div className="human-note"><strong>Sua resposta:</strong> {it.answer}</div>}
+                {it.edited && (
+                  <div>
+                    <button type="button" className="btn btn-tertiary btn-sm" onClick={() => setShowPrev((s) => ({ ...s, [it.id]: !s[it.id] }))} aria-expanded={!!showPrev[it.id]}>
+                      <Icon name="clock" size={14} />{showPrev[it.id] ? "Ocultar versão anterior" : "Ver versão da IA"}
+                    </button>
+                    {showPrev[it.id] && <p className="prev-text">Versão da IA: {it.prevText}</p>}
+                  </div>
+                )}
+                <div className="item-actions">
+                  {it.status === "discarded" ? (
+                    <Button size="sm" variant="secondary" icon="undo" onClick={() => { setItem(it.id, { status: it.kind === "question" ? (it.answer ? "answered" : "open") : "pending" }); decide(`Restaurou “${it.text}”`, "Análise"); toast("Item restaurado."); }}>Restaurar</Button>
+                  ) : (
+                    <>
+                      {it.kind !== "question" && (it.status === "confirmed"
+                        ? <Button size="sm" variant="secondary" icon="undo" onClick={() => { setItem(it.id, { status: "pending" }); decide(`Desfez a confirmação de “${it.text}”`, "Análise"); }}>Desfazer confirmação</Button>
+                        : <Button size="sm" variant="primary" icon="check" onClick={() => { setItem(it.id, { status: "confirmed" }); decide(`Confirmou “${it.text}”`, "Análise"); toast("Confirmado por você."); }}>Confirmar</Button>)}
+                      {it.kind === "question" && <Button size="sm" variant="primary" icon="message" onClick={() => setAnswering(it)}>{it.answer ? "Editar resposta" : "Responder"}</Button>}
+                      {it.kind !== "question" && <Button size="sm" variant="secondary" icon={it.kind === "fact" ? "eye" : "file"} onClick={() => setFocusId(it.id)}>{it.kind === "fact" ? "Ver evidência" : "Ver trecho relacionado"}</Button>}
+                      <Button size="sm" variant="tertiary" icon="pencil" onClick={() => setEditing(it)}>Editar</Button>
+                      <Button size="sm" variant="tertiary" icon="trash" onClick={() => setDiscarding(it)}>Descartar</Button>
+                    </>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+        <aside className="sticky-col" aria-label="Briefing original">
+          <div className="card card-pad stack">
+            <div className="between">
+              <h2>Briefing original</h2>
+              <Badge tone="neutral">Versão {job.briefVersion}</Badge>
+            </div>
+            {focus && focus.kind === "fact" && <div className="stack" style={{ gap: 6 }}><OriginBadge origin="fact" label="Evidência do fato selecionado" /><span className="small muted">“{focus.text}”</span></div>}
+            {focus && focus.kind === "hyp" && <div className="stack" style={{ gap: 6 }}><OriginBadge origin="hyp" label="Trecho que motivou a hipótese" /><span className="small muted">Não é evidência. A hipótese vai além do que está escrito.</span></div>}
+            <p className="evidence-text">{focus ? highlight(job.brief, focus.quote, focus.kind) : job.brief}</p>
+          </div>
+        </aside>
+      </div>
+      {confirmedCount > 0 && (
+        <ContextBar>
+          <span><strong>{confirmedCount} {confirmedCount === 1 ? "item confirmado" : "itens confirmados"}</strong> por você · {items.filter((i) => i.status === "pending").length} aguardando decisão · {openQ} {openQ === 1 ? "dúvida" : "dúvidas"} em aberto</span>
+          <Button variant="primary" iconRight="arrowRight" onClick={() => go("material")}>Continuar com itens confirmados</Button>
+        </ContextBar>
+      )}
+      {editing && (
+        <EditModal title="Editar item" label={editing.kind === "fact" ? "Texto do fato" : editing.kind === "hyp" ? "Texto da hipótese" : "Texto da dúvida"} value={editing.text} onClose={() => setEditing(null)}
+          prevNote={editing.kind === "fact" ? "Um fato editado vira texto seu: a evidência do briefing continua ligada à versão original." : undefined}
+          onSave={(v) => { setItem(editing.id, { text: v, edited: true, prevText: editing.edited ? editing.prevText : editing.text }); decide(`Editou “${editing.text}”`, "Análise"); setEditing(null); toast("Nova versão salva. Marcada como editada por você."); }} />
+      )}
+      {discarding && (
+        <ConfirmDiscard what={`“${discarding.text}”`} onClose={() => setDiscarding(null)} onConfirm={() => { setItem(discarding.id, { status: "discarded", prevStatus: discarding.status }); decide(`Descartou “${discarding.text}”`, "Análise"); setDiscarding(null); toast("Item descartado. Ele continua visível e pode ser restaurado."); }} />
+      )}
+      {answering && (
+        <EditModal title="Responder dúvida" label={answering.text} value={answering.answer || ""} onClose={() => setAnswering(null)}
+          prevNote="Sua resposta fica registrada como nota sua. Ela não vira fato do briefing, a menos que você atualize o briefing."
+          onSave={(v) => { setItem(answering.id, { answer: v, status: "answered" }); decide(`Respondeu “${answering.text}”`, "Análise"); setAnswering(null); toast("Resposta registrada."); }} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 4: Creative material                                         */
+/* ------------------------------------------------------------------ */
+function MaterialScreen({ job, update, go, toast, decide, logAI, openDemo }) {
+  const [open, setOpen] = useState(() => Object.fromEntries(SECTIONS.map((s) => [s.id, true])));
+  const [editing, setEditing] = useState(null);
+  const [discarding, setDiscarding] = useState(null);
+  const [swap, setSwap] = useState(null);
+  const [altRun, setAltRun] = useState(null);
+  if (!job.analyzed) return <NotStartedStage title="Matéria prima" job={job} go={go} openDemo={openDemo} />;
+  const mats = job.materials;
+  const setMat = (id, patch) => update((j) => ({ ...j, materials: j.materials.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+  const check = materialCheck(mats);
+  const primaryOf = (sec) => mats.find((m) => m.section === sec && m.role === "primary" && !m.discarded);
+  const secondariesOf = (sec) => mats.filter((m) => m.section === sec && m.role === "secondary" && !m.discarded);
+  const roleLabel = (sec) => (sec === "audience" ? "público" : "tensão");
+
+  const setRole = (m, role) => {
+    if (role === "primary") {
+      const cur = primaryOf(m.section);
+      if (cur && cur.id !== m.id) { setSwap({ item: m, current: cur }); return; }
+      setMat(m.id, { role: "primary", selected: true });
+      decide(`Definiu ${roleLabel(m.section)} primário: “${m.text}”`, "Matéria prima");
+    } else if (role === "secondary") {
+      setMat(m.id, { role: "secondary", selected: true });
+      decide(`Definiu ${roleLabel(m.section)} secundário: “${m.text}”`, "Matéria prima");
+    } else {
+      setMat(m.id, { role: null, selected: false });
+      decide(`Removeu o papel de “${m.text}”`, "Matéria prima");
+    }
+  };
+  const roleReason = (m, role) => {
+    const cur = primaryOf(m.section);
+    const secs = secondariesOf(m.section).filter((x) => x.id !== m.id);
+    if (role === "secondary") {
+      if (!cur || cur.id === m.id) return m.role === "primary" && secs.length === 0 ? "Escolha outro primário antes de tornar este secundário" : !cur ? "Defina um primário antes de adicionar secundários" : "Escolha outro primário antes de tornar este secundário";
+    }
+    if (role === "none" && m.role === "primary" && secs.length) return "Remova os secundários ou troque o primário antes";
+    return null;
+  };
+  const addAlternative = (sec) => {
+    const i = job.altIndex[sec] || 0;
+    const pool = ALT_POOL[sec];
+    const text = i < pool.length ? pool[i] : `${pool[i % pool.length]} (variação ${Math.floor(i / pool.length) + 1})`;
+    const item = { id: newId("m"), section: sec, text, origin: "ai", selected: false, role: null, isNew: true };
+    update((j) => ({ ...j, materials: [...j.materials, item], altIndex: { ...j.altIndex, [sec]: i + 1 } }));
+    logAI(`Sugeriu uma alternativa em ${SECTION_LABEL[sec]}`, "Matéria prima");
+    setOpen((o) => ({ ...o, [sec]: true }));
+    toast("Nova sugestão da IA adicionada. Ela não foi selecionada.");
+  };
+
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow="A partir dos itens confirmados"
+        title="Matéria prima"
+        lede="O material que vai ser combinado. A IA sugere, você seleciona e define o que é primário."
+      />
+      <div className="split">
+        <div className="stack-16">
+          {SECTIONS.map((s) => {
+            const list = mats.filter((m) => m.section === s.id);
+            const active = list.filter((m) => !m.discarded);
+            const used = active.filter(isUsed).length;
+            const panelId = "sec-" + s.id;
+            return (
+              <section key={s.id} className="section-card" aria-labelledby={panelId + "-h"}>
+                <div className="section-head">
+                  <button type="button" className="section-toggle" aria-expanded={open[s.id]} aria-controls={panelId} onClick={() => setOpen((o) => ({ ...o, [s.id]: !o[s.id] }))}>
+                    <Icon name={open[s.id] ? "chevronDown" : "chevronRight"} />
+                    <span className="stack" style={{ gap: 0 }}>
+                      <h2 id={panelId + "-h"}>{s.label}</h2>
+                      <span className="small muted">{used} {used === 1 ? "selecionado" : "selecionados"} de {active.length}</span>
+                    </span>
+                  </button>
+                  <Button size="sm" variant="ai" icon="sparkles" onClick={() => setAltRun({ key: Date.now(), sec: s.id })}>Pedir alternativas</Button>
+                </div>
+                {open[s.id] && (
+                  <div className="section-body stack" id={panelId}>
+                    <p className="hint">{s.hint}</p>
+                    <div className="grid-2">
+                      {list.map((m) => (
+                        <article key={m.id} className={`item${m.discarded ? " is-discarded" : isUsed(m) ? " is-selected" : m.isNew ? " is-new" : ""}`}>
+                          <div className="badges">
+                            <OriginBadge origin={m.origin} />
+                            {m.isNew && !m.discarded && <Badge tone="ai" icon="sparkles">Nova</Badge>}
+                            {m.edited && <EditedBadge />}
+                            {m.discarded && <DiscardedBadge />}
+                            {!m.discarded && m.role === "primary" && <HumanBadge icon="target">Primário · por você</HumanBadge>}
+                            {!m.discarded && m.role === "secondary" && <HumanBadge icon="target">Secundário · por você</HumanBadge>}
+                            {!m.discarded && !s.roles && m.selected && <HumanBadge>Selecionado por você</HumanBadge>}
+                          </div>
+                          <p className="item-text">{m.text}</p>
+                          {m.edited && <p className="item-note">Versão da IA: {m.prevText}</p>}
+                          <div className="item-actions">
+                            {m.discarded ? (
+                              <Button size="sm" variant="secondary" icon="undo" onClick={() => { setMat(m.id, { discarded: false }); decide(`Restaurou “${m.text}”`, "Matéria prima"); }}>Restaurar</Button>
+                            ) : s.roles ? (
+                              <>
+                                {m.role !== "primary" && <Button size="sm" variant="primary" icon="target" onClick={() => setRole(m, "primary")}>Tornar primário</Button>}
+                                {m.role !== "secondary" && <Button size="sm" variant="secondary" reason={roleReason(m, "secondary")} onClick={() => setRole(m, "secondary")}>Tornar secundário</Button>}
+                                {m.role && <Button size="sm" variant="tertiary" icon="x" reason={roleReason(m, "none")} onClick={() => setRole(m, null)}>Remover papel</Button>}
+                              </>
+                            ) : m.selected ? (
+                              <Button size="sm" variant="secondary" icon="x" onClick={() => { setMat(m.id, { selected: false }); decide(`Removeu a seleção de “${m.text}”`, "Matéria prima"); }}>Remover seleção</Button>
+                            ) : (
+                              <Button size="sm" variant="primary" icon="check" onClick={() => { setMat(m.id, { selected: true, isNew: false }); decide(`Selecionou “${m.text}”`, "Matéria prima"); }}>Selecionar</Button>
+                            )}
+                            {!m.discarded && <Button size="sm" variant="tertiary" icon="pencil" onClick={() => setEditing(m)}>Editar</Button>}
+                            {!m.discarded && <Button size="sm" variant="tertiary" icon="trash" reason={isUsed(m) ? "Remova a seleção antes de descartar" : null} onClick={() => setDiscarding(m)}>Descartar</Button>}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+        <aside className="sticky-col" aria-label="Resumo da seleção">
+          <div className="card card-pad stack-16">
+            <h2>Sua seleção</h2>
+            <ul className="sum-list">
+              {SECTIONS.map((s) => {
+                const sel = mats.filter((m) => m.section === s.id && !m.discarded && isUsed(m));
+                return (
+                  <li key={s.id}>
+                    <span className="sum-sec">{s.label}</span>
+                    {sel.length ? sel.map((m) => <span key={m.id} className="small">{m.role ? (m.role === "primary" ? "Primário: " : "Secundário: ") : ""}{m.text}</span>) : <span className="small muted">Nada selecionado</span>}
+                  </li>
+                );
+              })}
+            </ul>
+            {check.warnings.map((w) => <Alert key={w} tone="warn">{w}</Alert>)}
+            {check.info.map((w) => <p key={w} className="hint row"><Icon name="info" size={13} />{w}</p>)}
+            <Button variant="primary" iconRight="arrowRight" reason={check.ok ? null : "Resolva os avisos acima para criar combinações"} reasonInline onClick={() => { go("combos"); }}>Criar combinações</Button>
+          </div>
+        </aside>
+      </div>
+      {editing && (
+        <EditModal title="Editar item" label={SECTION_LABEL[editing.section]} value={editing.text} onClose={() => setEditing(null)}
+          prevNote="Combinações que já usam este item continuam apontando para a versão anterior."
+          onSave={(v) => { setMat(editing.id, { text: v, edited: true, prevText: editing.edited ? editing.prevText : editing.text }); decide(`Editou “${editing.text}”`, "Matéria prima"); setEditing(null); toast("Nova versão salva. Marcada como editada por você."); }} />
+      )}
+      {discarding && (
+        <ConfirmDiscard what={`“${discarding.text}”`} onClose={() => setDiscarding(null)} onConfirm={() => { setMat(discarding.id, { discarded: true }); decide(`Descartou “${discarding.text}”`, "Matéria prima"); setDiscarding(null); toast("Item descartado. Ele continua visível e pode ser restaurado."); }} />
+      )}
+      {swap && (
+        <Modal title={`Trocar ${roleLabel(swap.item.section)} primário`} onClose={() => setSwap(null)} footer={<>
+          <Button variant="secondary" onClick={() => setSwap(null)}>Cancelar</Button>
+          <Button variant="secondary" onClick={() => {
+            const secs = secondariesOf(swap.item.section).filter((x) => x.id !== swap.item.id && x.id !== swap.current.id);
+            update((j) => ({ ...j, materials: j.materials.map((m) => m.id === swap.current.id ? { ...m, role: null, selected: false } : m.id === swap.item.id ? { ...m, role: "primary", selected: true } : m) }));
+            decide(`Removeu o papel de “${swap.current.text}” e definiu “${swap.item.text}” como primário`, "Matéria prima");
+            setSwap(null);
+            if (secs.length) toast("Primário trocado. Os secundários continuam como estavam.");
+          }}>Remover papel do atual</Button>
+          <Button variant="primary" onClick={() => {
+            update((j) => ({ ...j, materials: j.materials.map((m) => m.id === swap.current.id ? { ...m, role: "secondary" } : m.id === swap.item.id ? { ...m, role: "primary", selected: true } : m) }));
+            decide(`Tornou “${swap.current.text}” secundário e definiu “${swap.item.text}” como primário`, "Matéria prima");
+            setSwap(null);
+          }}>Tornar o atual secundário</Button>
+        </>}>
+          <p>Já existe um primário: <strong>“{swap.current.text}”</strong>.</p>
+          <p className="lede">Nada muda sozinho. Escolha o que acontece com o primário atual.</p>
+        </Modal>
+      )}
+      {altRun && (
+        <ProcessingModal key={altRun.key} title="Gerar alternativas" steps={["Lendo sua seleção atual", `Gerando alternativa para ${SECTION_LABEL[altRun.sec]}`]}
+          doneTitle="Alternativa pronta" doneText="1 nova sugestão da IA. Ela entra na lista sem seleção. A decisão continua sua." doneLabel="Adicionar à lista"
+          onClose={() => setAltRun(null)} onDone={() => { addAlternative(altRun.sec); setAltRun(null); }} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 5: Combinations                                              */
+/* ------------------------------------------------------------------ */
+const COMBO_ALTS = [
+  { title: "A pausa que não isola", synthesis: "Brisa marca presença nos intervalos da noite, quando a conversa acontece.", ids: ["m3", "m6", "m9"] },
+  { title: "Brinde sem pergunta", synthesis: "O gesto do brinde é o mesmo. A pergunta “o que você está bebendo?” some.", ids: ["m5", "m7"] },
+];
+function comboRule(ids, materials) {
+  const secs = ids.map((id) => (materials.find((m) => m.id === id) || {}).section);
+  const human = secs.filter((s) => s === "truth" || s === "tension").length;
+  const brand = secs.filter((s) => s === "brand" || s === "category").length;
+  const mech = secs.filter((s) => s === "mechanism").length;
+  const errs = [];
+  if (!human) errs.push("Inclua ao menos uma verdade ou tensão humana.");
+  if (!brand) errs.push("Inclua ao menos um elemento de marca ou de categoria.");
+  if (mech > 1) errs.push("Use no máximo um mecanismo criativo.");
+  if (ids.length > 5) errs.push("Use no máximo cinco componentes.");
+  return errs;
+}
+function ComboComponents({ combo, materials }) {
+  return (
+    <div className="chips">
+      {combo.components.map((c) => {
+        const cur = materials.find((m) => m.id === c.id);
+        const changed = cur && cur.text !== c.text;
+        return (
+          <div key={c.id} className="chip">
+            <span className="k">{SECTION_LABEL[c.section]}</span>
+            <span>{c.text}{changed && <span className="muted small"> · há versão mais nova</span>}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function CombosScreen({ job, update, go, toast, decide, logAI, openDemo }) {
+  const [inspect, setInspect] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [discarding, setDiscarding] = useState(null);
+  const [altRun, setAltRun] = useState(null);
+  const [genRun, setGenRun] = useState(null);
+  const chosen = job.combos.filter((c) => c.state === "chosen");
+  const [genFrom, setGenFrom] = useState(null);
+  const genSource = chosen.find((c) => c.id === genFrom) || chosen[0];
+  if (!job.analyzed) return <NotStartedStage title="Combinações" job={job} go={go} openDemo={openDemo} />;
+  const setCombo = (id, patch) => update((j) => ({ ...j, combos: j.combos.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  const genReason = chosen.length ? null : "Escolha uma combinação para gerar caminhos";
+
+  const addAlt = () => {
+    const used = job.combos.filter((c) => c.origin === "ai").length - 3;
+    const alt = COMBO_ALTS[used % COMBO_ALTS.length];
+    const round = job.comboRound + 1;
+    const combo = { id: newId("c"), title: used >= COMBO_ALTS.length ? `${alt.title} (rodada ${round})` : alt.title, synthesis: alt.synthesis, components: snap(job.materials, alt.ids), origin: "ai", round, state: "proposed", isNew: true };
+    update((j) => ({ ...j, combos: [...j.combos, combo], comboRound: round }));
+    logAI(`Propôs a combinação “${combo.title}”`, "Combinações");
+    toast("Nova combinação sugerida pela IA. Ela não foi escolhida.");
+  };
+  const generatePaths = () => {
+    const src = genSource.title;
+    update((j) => {
+      const live = j.paths.filter((p) => !p.discarded);
+      let add;
+      if (!live.length && !j.paths.length) add = basePaths(src);
+      else {
+        const k = j.pathRounds - 1;
+        const extra = EXTRA_PATHS[k % EXTRA_PATHS.length];
+        add = [{ ...extra, id: newId("p"), title: k >= EXTRA_PATHS.length ? `${extra.title} ${k + 1}` : extra.title, source: src, origin: "ai", finalist: false, discarded: false, round: j.pathRounds + 1 }];
+      }
+      return { ...j, paths: [...j.paths, ...add], pathRounds: j.pathRounds + 1 };
+    });
+    logAI(`Gerou caminhos a partir de “${src}”`, "Caminhos");
+    setGenRun(null);
+    go("paths");
+  };
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow="A partir da sua matéria prima"
+        title="Combinações"
+        lede="A IA cruzou o material selecionado. Cada combinação mostra exatamente o que usa. Só você escolhe qual segue para caminhos."
+        actions={<>
+          <Button variant="ai" icon="sparkles" onClick={() => setAltRun(Date.now())}>Gerar alternativas</Button>
+          <Button variant="primary" icon="flag" reason={genReason} reasonInline onClick={() => setGenRun(Date.now())}>Gerar caminhos</Button>
+        </>}
+      />
+      <Alert tone="info" icon="user">A IA propõe combinações, mas nunca escolhe uma. “Escolhida por você” só aparece depois do seu clique.</Alert>
+      <div className="grid-3">
+        {job.combos.map((c) => {
+          const isChosen = c.state === "chosen";
+          const isDiscarded = c.state === "discarded";
+          return (
+            <article key={c.id} className={`item combo-card${isChosen ? " is-chosen" : ""}${isDiscarded ? " is-discarded" : ""}${c.isNew && !isChosen && !isDiscarded ? " is-new" : ""}`}>
+              <div className="between">
+                <div className="badges">
+                  {c.origin === "user" ? <OriginBadge origin="user" label="Composição sua" /> : <OriginBadge origin="ai" label={`Sugestão da IA · rodada ${c.round}`} />}
+                </div>
+                {isChosen ? <HumanBadge icon="check">Escolhida por você</HumanBadge> : isDiscarded ? <DiscardedBadge /> : <Badge tone="neutral" icon="clock">Aguardando sua escolha</Badge>}
+              </div>
+              <h3 className={isDiscarded ? "item-text" : ""}>{c.title}</h3>
+              <p className="lede">{c.synthesis}</p>
+              <div className="stack" style={{ gap: 6 }}>
+                <span className="eyebrow">Componentes usados · {c.components.length}</span>
+                <ComboComponents combo={c} materials={job.materials} />
+              </div>
+              {c.derivedFrom && <p className="item-note row"><Icon name="branch" size={12} />Derivada de “{c.derivedFrom}”, que continua disponível.</p>}
+              <hr className="divider" />
+              <div className="item-actions">
+                {isDiscarded ? (
+                  <Button size="sm" variant="secondary" icon="undo" onClick={() => { setCombo(c.id, { state: "proposed" }); decide(`Restaurou a combinação “${c.title}”`, "Combinações"); }}>Restaurar</Button>
+                ) : isChosen ? (
+                  <Button size="sm" variant="secondary" icon="x" onClick={() => { setCombo(c.id, { state: "proposed" }); decide(`Removeu a escolha de “${c.title}”`, "Combinações"); }}>Remover escolha</Button>
+                ) : (
+                  <Button size="sm" variant="primary" icon="check" onClick={() => { setCombo(c.id, { state: "chosen", isNew: false }); decide(`Escolheu a combinação “${c.title}”`, "Combinações"); toast(`“${c.title}” escolhida por você.`); }}>Escolher</Button>
+                )}
+                <Button size="sm" variant="tertiary" icon="branch" onClick={() => setInspect(c)}>Inspecionar origem</Button>
+                {!isDiscarded && <Button size="sm" variant="tertiary" icon="pencil" onClick={() => setEditing(c)}>Editar composição</Button>}
+                {!isDiscarded && <Button size="sm" variant="tertiary" icon="trash" reason={isChosen ? "Remova a escolha antes de descartar" : null} onClick={() => setDiscarding(c)}>Descartar</Button>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+      {chosen.length > 0 && (
+        <ContextBar>
+          <span className="row">
+            <HumanBadge>{chosen.length === 1 ? "1 combinação escolhida" : `${chosen.length} combinações escolhidas`}</HumanBadge>
+            {chosen.length > 1 ? (
+              <>
+                <label htmlFor="gen-from" className="small">Gerar a partir de</label>
+                <select id="gen-from" className="select" style={{ width: 240 }} value={genSource.id} onChange={(e) => setGenFrom(e.target.value)}>
+                  {chosen.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+              </>
+            ) : <strong>{genSource.title}</strong>}
+          </span>
+          <Button variant="primary" icon="flag" onClick={() => setGenRun(Date.now())}>Gerar caminhos</Button>
+        </ContextBar>
+      )}
+      {inspect && (
+        <SidePanel title={inspect.title} eyebrow="Inspecionar origem" onClose={() => setInspect(null)}>
+          <div className="badges">
+            {inspect.origin === "user" ? <OriginBadge origin="user" label="Composição sua" /> : <OriginBadge origin="ai" label={`Sugestão da IA · rodada ${inspect.round}`} />}
+            {inspect.state === "chosen" && <HumanBadge>Escolhida por você</HumanBadge>}
+          </div>
+          <p className="lede">{inspect.synthesis}</p>
+          <div className="stack">
+            <span className="eyebrow">Versões exatas usadas</span>
+            {inspect.components.map((c) => {
+              const cur = job.materials.find((m) => m.id === c.id);
+              return (
+                <div key={c.id} className="item" style={{ padding: 12, gap: 8 }}>
+                  <div className="between"><span className="sum-sec">{SECTION_LABEL[c.section]}</span><OriginBadge origin={c.origin} /></div>
+                  <p>{c.text}</p>
+                  <div className="badges">
+                    {c.edited && <EditedBadge />}
+                    {cur && cur.text !== c.text && <Badge tone="warn" icon="alert">O item foi editado depois. Esta combinação mantém a versão acima.</Badge>}
+                    {cur && cur.discarded && <Badge tone="discard">Item descartado depois</Badge>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="stack" style={{ gap: 6 }}>
+            <span className="eyebrow">Rastreabilidade</span>
+            <p className="small muted">{inspect.origin === "user" ? `Criada por você a partir de “${inspect.derivedFrom}”.` : `Gerada pela IA a partir da matéria prima selecionada, na rodada ${inspect.round}. Briefing versão ${job.briefVersion}.`}</p>
+            <p className="small muted">A IA não escolhe combinações. A escolha é registrada como decisão sua.</p>
+          </div>
+        </SidePanel>
+      )}
+      {editing && <ComposeModal combo={editing} materials={job.materials} onClose={() => setEditing(null)} onSave={(ids, title) => {
+        const combo = { id: newId("c"), title, synthesis: editing.synthesis, components: snap(job.materials, ids), origin: "user", round: editing.round, state: "proposed", derivedFrom: editing.title };
+        update((j) => ({ ...j, combos: [...j.combos, combo] }));
+        decide(`Criou a combinação “${title}” a partir de “${editing.title}”`, "Combinações");
+        setEditing(null);
+        toast("Nova combinação criada. A original continua disponível.");
+      }} />}
+      {discarding && (
+        <ConfirmDiscard what={`a combinação “${discarding.title}”`} onClose={() => setDiscarding(null)} onConfirm={() => { setCombo(discarding.id, { state: "discarded" }); decide(`Descartou a combinação “${discarding.title}”`, "Combinações"); setDiscarding(null); toast("Combinação descartada. Ela pode ser restaurada."); }} />
+      )}
+      {altRun && (
+        <ProcessingModal key={altRun} title="Gerar alternativas" steps={["Relendo a matéria prima selecionada", "Cruzando verdades, tensões e marca"]}
+          doneTitle="Alternativa pronta" doneText="1 nova combinação sugerida pela IA. Ela não foi escolhida." doneLabel="Adicionar à lista"
+          onClose={() => setAltRun(null)} onDone={() => { addAlt(); setAltRun(null); }} />
+      )}
+      {genRun && genSource && (
+        <ProcessingModal key={genRun} title="Gerando caminhos" steps={[`Lendo “${genSource.title}”`, "Cruzando com público e tensão", "Escrevendo caminhos criativos"]}
+          doneTitle="Caminhos prontos" doneText={`Caminhos gerados a partir de “${genSource.title}”. Nenhum foi marcado como finalista.`} doneLabel="Ver caminhos"
+          onClose={() => setGenRun(null)} onDone={generatePaths} />
+      )}
+    </div>
+  );
+}
+function ComposeModal({ combo, materials, onClose, onSave }) {
+  const [ids, setIds] = useState(combo.components.map((c) => c.id));
+  const [title, setTitle] = useState(combo.title + " (versão sua)");
+  const eligible = materials.filter((m) => !m.discarded && m.section !== "audience");
+  const errs = comboRule(ids, materials);
+  const same = ids.length === combo.components.length && ids.every((id) => combo.components.some((c) => c.id === id));
+  const toggle = (id) => setIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  return (
+    <Modal wide title="Editar composição" onClose={onClose} footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+      <Button variant="primary" icon="check" reason={errs.length ? "Corrija a composição para salvar" : same ? "Mude ao menos um componente" : !title.trim() ? "Dê um nome à combinação" : null} onClick={() => onSave(ids, title.trim())}>Salvar como nova combinação</Button>
+    </>}>
+      <Alert tone="info" icon="branch">Mudar os componentes cria uma nova combinação. “{combo.title}” continua disponível como está.</Alert>
+      <div className="field">
+        <label htmlFor="combo-title">Nome da nova combinação</label>
+        <input id="combo-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
+      </div>
+      <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend className="label">Componentes ({ids.length} de no máximo 5)</legend>
+        {SECTIONS.filter((s) => s.id !== "audience").map((s) => {
+          const list = eligible.filter((m) => m.section === s.id);
+          if (!list.length) return null;
+          return (
+            <div key={s.id} className="stack" style={{ gap: 6 }}>
+              <span className="sum-sec">{s.label}</span>
+              {list.map((m) => (
+                <label key={m.id} className="check"><input type="checkbox" checked={ids.includes(m.id)} onChange={() => toggle(m.id)} />{m.text}</label>
+              ))}
+            </div>
+          );
+        })}
+      </fieldset>
+      {errs.map((e) => <Alert key={e} tone="warn">{e}</Alert>)}
+    </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 6: Creative paths                                            */
+/* ------------------------------------------------------------------ */
+function PathEditModal({ path, onSave, onClose }) {
+  const [f, setF] = useState({ premise: path.premise, execution: path.execution, tone: path.tone, risks: path.risks });
+  const changed = Object.keys(f).some((k) => f[k].trim() !== path[k].trim());
+  const fields = [["premise", "Premissa", 2], ["execution", "Ideia de execução", 4], ["tone", "Tom", 1], ["risks", "Riscos", 2]];
+  return (
+    <Modal wide title={`Editar “${path.title}”`} onClose={onClose} footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+      <Button variant="primary" icon="check" reason={changed ? null : "Altere algum campo para salvar uma nova versão"} onClick={() => onSave(f)}>Salvar como versão sua</Button>
+    </>}>
+      {fields.map(([k, label, rows]) => (
+        <div key={k} className="field">
+          <label htmlFor={"pe-" + k}>{label}</label>
+          <textarea id={"pe-" + k} className="textarea" rows={rows} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
+        </div>
+      ))}
+      <p className="hint">O caminho continua ligado à mesma combinação de origem. A versão da IA fica guardada.</p>
+    </Modal>
+  );
+}
+function PathsScreen({ job, update, go, toast, decide, logAI, openDemo }) {
+  const [view, setView] = useState("grid");
+  const [editing, setEditing] = useState(null);
+  const [discarding, setDiscarding] = useState(null);
+  const [varRun, setVarRun] = useState(null);
+  const [simulateError, setSimulateError] = useState(false);
+  const [showDiscarded, setShowDiscarded] = useState(false);
+  const live = job.paths.filter((p) => !p.discarded);
+  const discarded = job.paths.filter((p) => p.discarded);
+  const finalists = job.finalistOrder.map((id) => job.paths.find((p) => p.id === id)).filter(Boolean);
+  const sources = [...new Set(job.paths.map((p) => p.source))];
+  const setPath = (id, patch) => update((j) => ({ ...j, paths: j.paths.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
+  const toggleFinalist = (p) => {
+    const on = !job.finalistOrder.includes(p.id);
+    update((j) => ({ ...j, finalistOrder: on ? [...j.finalistOrder, p.id] : j.finalistOrder.filter((x) => x !== p.id), evals: on && !j.evals[p.id] ? { ...j.evals, [p.id]: DEFAULT_EVAL[p.id] || { strategy: 3, distinction: 3, fit: 3, flexibility: 3, risks: p.risks, comment: "" } } : j.evals }));
+    decide(on ? `Selecionou “${p.title}” como finalista` : `Removeu “${p.title}” dos finalistas`, "Caminhos");
+    if (!on) toast("Removido dos finalistas. O caminho continua disponível.");
+  };
+  const addVariation = (p) => {
+    const v = { ...p, id: newId("p"), title: `${p.title} · variação`, premise: `Variação de “${p.title}”: a mesma ideia contada a partir de quem serve as bebidas na noite.`, origin: "ai", variationOf: p.title, finalist: false, discarded: false, edited: false, prev: null };
+    update((j) => ({ ...j, paths: [...j.paths, v] }));
+    logAI(`Gerou uma variação de “${p.title}”`, "Caminhos");
+    toast("Variação adicionada como sugestão da IA.");
+  };
+  const isFin = (p) => job.finalistOrder.includes(p.id);
+  const originBadge = (p) => p.edited ? <EditedBadge /> : p.variationOf ? <OriginBadge origin="ai" label="Variação da IA" /> : <OriginBadge origin="ai" />;
+
+  if (!job.analyzed) return <NotStartedStage title="Caminhos criativos" job={job} go={go} openDemo={openDemo} />;
+  if (!job.paths.length) {
+    return (
+      <div className="content-inner">
+        <PageHead title="Caminhos criativos" />
+        <div className="card"><EmptyState icon="flag" title="Nenhum caminho gerado ainda" action={<Button variant="primary" iconRight="arrowRight" onClick={() => go("combos")}>Ir para Combinações</Button>}>Escolha uma combinação e peça para gerar caminhos. Eles aparecem aqui, sem nenhum finalista marcado.</EmptyState></div>
+      </div>
+    );
+  }
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow="Etapa atual"
+        title="Caminhos criativos"
+        lede="Direções criativas geradas a partir da combinação que você escolheu. Compare, ajuste e marque os finalistas."
+        actions={<Segmented label="Visualização" value={view} onChange={setView} options={[{ id: "grid", label: "Grade", icon: "grid" }, { id: "compare", label: "Comparar", icon: "columns" }]} />}
+      >
+        <div className="row">
+          <span className="small muted">Origem:</span>
+          {sources.map((s) => <Badge key={s} tone="edited" icon="branch">{s}</Badge>)}
+          <HumanBadge>Escolhida por você</HumanBadge>
+        </div>
+      </PageHead>
+      <div className="between">
+        <span className="small muted">{live.length} caminhos ativos · {finalists.length} {finalists.length === 1 ? "finalista" : "finalistas"}{discarded.length ? ` · ${discarded.length} descartados` : ""}</span>
+        <label className="check"><input type="checkbox" checked={simulateError} onChange={(e) => setSimulateError(e.target.checked)} />Simular erro na próxima geração de variação</label>
+      </div>
+      {view === "grid" ? (
+        <div className="grid-3">
+          {live.map((p) => (
+            <article key={p.id} className={`item${isFin(p) ? " is-selected" : ""}`}>
+              <div className="between">
+                <div className="badges">{originBadge(p)}</div>
+                {isFin(p) ? <HumanBadge icon="star">Finalista · por você</HumanBadge> : null}
+              </div>
+              <h3>{p.title}</h3>
+              <p className="lede">{p.premise}</p>
+              <dl className="dl">
+                <dt>Execução</dt><dd>{p.execution}</dd>
+                <dt>Tom</dt><dd>{p.tone}</dd>
+                <dt>Peças</dt><dd>{p.pieces.join(" · ")}</dd>
+                <dt>Riscos</dt><dd className="row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}><Icon name="alert" size={14} className="" />{p.risks}</dd>
+                <dt>Origem</dt><dd><span className="row"><Icon name="branch" size={13} />{p.source}{p.variationOf ? ` · variação de “${p.variationOf}”` : ""}</span></dd>
+              </dl>
+              {p.edited && p.prev && <p className="item-note">Versão da IA guardada: “{p.prev.premise}”</p>}
+              <hr className="divider" />
+              <div className="item-actions">
+                <Button size="sm" variant={isFin(p) ? "secondary" : "primary"} icon={isFin(p) ? "x" : "star"} onClick={() => toggleFinalist(p)}>{isFin(p) ? "Remover dos finalistas" : "Marcar como finalista"}</Button>
+                <Button size="sm" variant="tertiary" icon="pencil" onClick={() => setEditing(p)}>Editar</Button>
+                <Button size="sm" variant="tertiary" icon="sparkles" onClick={() => setVarRun({ key: Date.now(), path: p, fail: simulateError })}>Gerar variação</Button>
+                <Button size="sm" variant="tertiary" icon="trash" reason={isFin(p) ? "Remova dos finalistas antes de descartar" : null} onClick={() => setDiscarding(p)}>Descartar</Button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="cmp">
+            <thead>
+              <tr>
+                <th scope="col"><span className="sr-only">Critério</span></th>
+                {live.map((p) => (
+                  <th key={p.id} scope="col">
+                    <div className="stack" style={{ gap: 6 }}>
+                      <strong>{p.title}</strong>
+                      <div className="badges">{originBadge(p)}{isFin(p) && <HumanBadge icon="star">Finalista</HumanBadge>}</div>
+                      <div><Button size="sm" variant={isFin(p) ? "secondary" : "primary"} icon={isFin(p) ? "x" : "star"} onClick={() => toggleFinalist(p)}>{isFin(p) ? "Remover" : "Finalista"}</Button></div>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[["Premissa", "premise"], ["Execução", "execution"], ["Tom", "tone"], ["Peças", "pieces"], ["Riscos", "risks"], ["Origem", "source"]].map(([label, k]) => (
+                <tr key={k}>
+                  <th scope="row">{label}</th>
+                  {live.map((p) => <td key={p.id}>{Array.isArray(p[k]) ? p[k].join(" · ") : p[k]}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {discarded.length > 0 && (
+        <div className="stack">
+          <button type="button" className="btn btn-tertiary" style={{ alignSelf: "flex-start" }} aria-expanded={showDiscarded} onClick={() => setShowDiscarded(!showDiscarded)}>
+            <Icon name={showDiscarded ? "chevronDown" : "chevronRight"} />Descartados ({discarded.length})
+          </button>
+          {showDiscarded && (
+            <div className="grid-3">
+              {discarded.map((p) => (
+                <article key={p.id} className="item is-discarded">
+                  <div className="badges"><DiscardedBadge /></div>
+                  <h3 className="item-text">{p.title}</h3>
+                  <p className="small muted">{p.premise}</p>
+                  <div><Button size="sm" variant="secondary" icon="undo" onClick={() => { setPath(p.id, { discarded: false }); decide(`Restaurou o caminho “${p.title}”`, "Caminhos"); }}>Restaurar</Button></div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {finalists.length > 0 && (
+        <ContextBar>
+          <span className="row"><HumanBadge icon="star">{finalists.length === 1 ? "1 caminho selecionado" : `${finalists.length} caminhos selecionados`}</HumanBadge><span className="small">{finalists.map((p) => p.title).join(" · ")}</span></span>
+          <Button variant="primary" iconRight="arrowRight" onClick={() => go("finalists")}>Revisar finalistas</Button>
+        </ContextBar>
+      )}
+      {editing && <PathEditModal path={editing} onClose={() => setEditing(null)} onSave={(f) => {
+        setPath(editing.id, { ...f, edited: true, prev: editing.prev || { premise: editing.premise } });
+        decide(`Editou o caminho “${editing.title}”`, "Caminhos");
+        setEditing(null);
+        toast("Nova versão do caminho salva. Marcada como editada por você.");
+      }} />}
+      {discarding && (
+        <ConfirmDiscard what={`o caminho “${discarding.title}”`} onClose={() => setDiscarding(null)} onConfirm={() => { setPath(discarding.id, { discarded: true }); decide(`Descartou o caminho “${discarding.title}”`, "Caminhos"); setDiscarding(null); setShowDiscarded(true); toast("Caminho descartado. Ele está em “Descartados” e pode ser restaurado."); }} />
+      )}
+      {varRun && (
+        <ProcessingModal key={varRun.key} title="Gerando variação" steps={[`Lendo “${varRun.path.title}”`, "Mantendo a mesma origem", "Escrevendo a variação"]} failFirst={varRun.fail}
+          errorTitle="Erro de geração" errorText={`A variação de “${varRun.path.title}” não foi gerada. O serviço de IA simulado não respondeu a tempo.`}
+          preserveNote="Nenhum caminho foi alterado. Seus finalistas e edições continuam como estavam."
+          doneTitle="Variação pronta" doneText="1 variação gerada. Ela entra como sugestão da IA, fora dos finalistas." doneLabel="Adicionar variação"
+          onClose={() => { if (varRun.fail) setSimulateError(false); setVarRun(null); }}
+          onDone={() => { addVariation(varRun.path); if (varRun.fail) setSimulateError(false); setVarRun(null); }} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 7: Finalists                                                 */
+/* ------------------------------------------------------------------ */
+function ScoreControl({ value, onChange, label }) {
+  return (
+    <div className="score" role="group" aria-label={label}>
+      {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" aria-pressed={value === n} aria-label={`${label}: ${n} de 5`} onClick={() => onChange(n)}>{n}</button>)}
+    </div>
+  );
+}
+function buildBlocks(job, finalists) {
+  const rec = job.recommendation.text;
+  const blocks = [
+    { baseId: "b1", title: "O desafio", body: "Brisa chega no verão como um chá gaseificado sem álcool, em lata. O desafio é torná-la uma escolha desejável nos encontros em que a pessoa quer participar do ritual, mas não quer beber álcool." },
+    { baseId: "b2", title: "O que descobrimos", body: "O briefing pede foco nas capitais, nas noites entre amigos e nos canais digitais, sem tom moralista. Nossa leitura: quem não bebe não quer ser tratado como exceção, nem ter que se explicar na mesa." },
+    { baseId: "b3", title: "A tensão humana", body: "“Quero fazer uma escolha melhor sem precisar explicá-la.” Pertencer parece mais fácil quando todos repetem o mesmo ritual. É aí que a escolha sem álcool costuma virar assunto." },
+    { baseId: "b4", title: "A oportunidade criativa", body: "Reenquadrar a escolha sem álcool como presença, não ausência. Brisa entra no brinde, no copo e na foto do grupo, com bolhas, sabor adulto e uma lata elegante, sem virar pauta." },
+  ];
+  finalists.forEach((p, i) => blocks.push({ baseId: "path-" + p.id, title: `Caminho ${i + 1}: ${p.title}`, body: `${p.premise} ${p.execution} Tom: ${p.tone.toLowerCase()} Peças: ${p.pieces.join(", ")}.` }));
+  blocks.push({ baseId: "b7", title: "Comparação e recomendação", body: `${finalists.map((p) => p.title).join(" e ")} respondem à mesma tensão por lados diferentes. ${rec}` });
+  return blocks.map((b) => ({ ...b, id: newId("b"), author: "ai", hidden: false, versions: [{ n: 1, label: "Rascunho gerado com IA a partir das suas decisões", body: b.body, author: "ai" }] }));
+}
+function FinalistsScreen({ job, update, go, toast, decide, logAI, openDemo }) {
+  const [confirm, setConfirm] = useState(false);
+  if (!job.analyzed) return <NotStartedStage title="Finalistas" job={job} go={go} openDemo={openDemo} />;
+  const finalists = job.finalistOrder.map((id) => job.paths.find((p) => p.id === id)).filter(Boolean);
+  const setEval = (pid, patch) => update((j) => ({ ...j, evals: { ...j.evals, [pid]: { ...j.evals[pid], ...patch } } }));
+  const move = (i, d) => update((j) => { const o = [...j.finalistOrder]; const [x] = o.splice(i, 1); o.splice(i + d, 0, x); return { ...j, finalistOrder: o }; });
+  const remove = (p) => { update((j) => ({ ...j, finalistOrder: j.finalistOrder.filter((x) => x !== p.id) })); decide(`Removeu “${p.title}” dos finalistas`, "Finalistas"); toast("Removido dos finalistas. O caminho continua ativo em Caminhos."); };
+  const create = () => {
+    const blocks = buildBlocks(job, finalists);
+    const pres = { id: newId("pres"), name: `Apresentação ${job.presentations.length + 1}`, version: 1, createdAt: nowLabel(), finalists: finalists.map((p) => p.title), blocks, selected: blocks[0].id };
+    update((j) => ({ ...j, presentations: [...j.presentations, pres], currentPres: pres.id }));
+    decide(`Criou “${pres.name}” com ${finalists.map((p) => p.title).join(" e ")}`, "Apresentação");
+    logAI(`Rascunhou ${blocks.length} blocos para “${pres.name}”`, "Apresentação");
+    setConfirm(false);
+    go("presentation");
+  };
+  if (!finalists.length) {
+    return (
+      <div className="content-inner">
+        <PageHead title="Finalistas" />
+        <div className="card"><EmptyState icon="star" title="Nenhum finalista selecionado" action={<Button variant="primary" iconRight="arrowRight" onClick={() => go("paths")}>Ir para Caminhos criativos</Button>}>Marque um ou mais caminhos como finalistas. Nenhum caminho é escolhido automaticamente.</EmptyState></div>
+      </div>
+    );
+  }
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow={`${finalists.length} ${finalists.length === 1 ? "finalista selecionado" : "finalistas selecionados"} por você`}
+        title="Finalistas"
+        lede="Avalie lado a lado. As notas e comentários são seus e vão para a apresentação como argumento."
+        actions={<Button variant="primary" icon="monitor" onClick={() => setConfirm(true)}>Criar apresentação</Button>}
+      />
+      <div className="table-wrap">
+        <table className="cmp">
+          <thead>
+            <tr>
+              <th scope="col"><span className="sr-only">Critério</span></th>
+              {finalists.map((p, i) => (
+                <th key={p.id} scope="col" style={{ minWidth: 280 }}>
+                  <div className="stack" style={{ gap: 8 }}>
+                    <div className="row" style={{ flexWrap: "nowrap" }}>
+                      <span className="rank" aria-label={`Posição ${i + 1}`}>{i + 1}º</span>
+                      <strong style={{ fontSize: 15 }}>{p.title}</strong>
+                    </div>
+                    <div className="badges"><HumanBadge icon="star">Finalista · por você</HumanBadge>{p.edited && <EditedBadge />}</div>
+                    <div className="row" style={{ gap: 2 }}>
+                      <IconButton icon="arrowLeft" label={`Mover ${p.title} para antes`} disabled={i === 0} onClick={() => move(i, -1)} />
+                      <IconButton icon="arrowRight" label={`Mover ${p.title} para depois`} disabled={i === finalists.length - 1} onClick={() => move(i, 1)} />
+                      <Button size="sm" variant="tertiary" icon="x" onClick={() => remove(p)}>Remover dos finalistas</Button>
+                    </div>
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Premissa</th>{finalists.map((p) => <td key={p.id} className="muted">{p.premise}</td>)}</tr>
+            {CRITERIA.map((c) => (
+              <tr key={c.id}>
+                <th scope="row">{c.label}</th>
+                {finalists.map((p) => <td key={p.id}><ScoreControl label={`${c.label} de ${p.title}`} value={(job.evals[p.id] || {})[c.id]} onChange={(n) => setEval(p.id, { [c.id]: n })} /></td>)}
+              </tr>
+            ))}
+            <tr>
+              <th scope="row">Riscos</th>
+              {finalists.map((p) => <td key={p.id}><label className="sr-only" htmlFor={"risk-" + p.id}>Riscos de {p.title}</label><textarea id={"risk-" + p.id} className="textarea" rows={3} value={(job.evals[p.id] || {}).risks || ""} onChange={(e) => setEval(p.id, { risks: e.target.value })} /></td>)}
+            </tr>
+            <tr>
+              <th scope="row">Comentário do criativo</th>
+              {finalists.map((p) => <td key={p.id}><label className="sr-only" htmlFor={"com-" + p.id}>Comentário sobre {p.title}</label><textarea id={"com-" + p.id} className="textarea" rows={3} placeholder="Por que este caminho merece ir para a apresentação?" value={(job.evals[p.id] || {}).comment || ""} onChange={(e) => setEval(p.id, { comment: e.target.value })} /></td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="card card-pad stack">
+        <div className="between">
+          <label htmlFor="rec" className="label" style={{ fontSize: 15 }}>Recomendação</label>
+          {job.recommendation.author === "ai" ? <OriginBadge origin="ai" label="Rascunho da IA · edite antes de apresentar" /> : <EditedBadge />}
+        </div>
+        <textarea id="rec" className="textarea" rows={3} value={job.recommendation.text} onChange={(e) => update((j) => ({ ...j, recommendation: { text: e.target.value, author: "user" } }))} />
+        <p className="hint">A ordem dos finalistas acima define a ordem dos caminhos na apresentação.</p>
+      </div>
+      {confirm && (
+        <Modal title="Confirmar apresentação" onClose={() => setConfirm(false)} footer={<>
+          <Button variant="secondary" onClick={() => setConfirm(false)}>Voltar</Button>
+          <Button variant="primary" icon="monitor" onClick={create}>Criar apresentação</Button>
+        </>}>
+          <p>Estes finalistas entram na apresentação, nesta ordem:</p>
+          <ol className="stack" style={{ margin: 0, paddingLeft: 20 }}>
+            {finalists.map((p) => <li key={p.id}><strong>{p.title}</strong> <span className="muted small">· {p.source}</span></li>)}
+          </ol>
+          <Alert tone="info" icon="sparkles">A IA vai rascunhar os blocos de texto a partir das suas decisões. Você revisa e edita tudo antes de usar. Nada é enviado ao cliente.</Alert>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 8: Presentation editor                                       */
+/* ------------------------------------------------------------------ */
+const REWRITES = {
+  b1: ["Brisa é um chá gaseificado sem álcool, em lata, que chega no verão. O desafio: fazer dela a escolha desejada de quem quer estar no ritual sem beber álcool.", "Como fazer um chá sem álcool ser a bebida mais desejada da noite? Esse é o desafio de Brisa no próximo verão."],
+  b2: ["Capitais, noite, amigos e digital, sem moralismo. Quem não bebe não quer ser exceção nem dar explicação.", "O briefing é claro sobre onde e quando. O que ele não diz em voz alta: a pessoa que não bebe cansou de justificar a escolha."],
+  b3: ["Quero fazer uma escolha melhor sem precisar explicá-la. Todo mundo quer pertencer, e o ritual é o atalho.", "“Quero fazer uma escolha melhor sem precisar explicá-la.” Na mesa, o copo diferente vira pergunta. Brisa tira a pergunta da mesa."],
+  b4: ["Presença, não ausência. Brisa entra no brinde e na foto sem virar assunto.", "A oportunidade é mudar o ponto de vista: não é sobre o que falta no copo, é sobre quem continua na roda."],
+  b7: ["Os dois caminhos resolvem a mesma tensão. Recomendamos seguir com o primeiro e usar o segundo para desdobramentos digitais.", "Um caminho é mais corajoso, o outro mais flexível. Nossa recomendação é começar pelo corajoso e sustentar a campanha com o flexível."],
+};
+function proposeRewrite(block, instruction, attempt) {
+  const ins = instruction.toLowerCase();
+  const sentences = block.body.split(/(?<=[.!?”])\s+/);
+  if (ins.includes("curt") || ins.includes("resum") || ins.includes("enxug")) return sentences.slice(0, Math.max(1, Math.ceil(sentences.length / 2))).join(" ");
+  const alts = REWRITES[block.baseId];
+  if (alts) return alts[attempt % alts.length];
+  if (ins.includes("client") || ins.includes("diret")) return "Em uma frase: " + sentences[0];
+  return sentences.length > 1 ? sentences.slice(1).join(" ") + " " + sentences[0] : "Em resumo: " + block.body;
+}
+function RewriteModal({ block, onApply, onClose }) {
+  const [phase, setPhase] = useState("input");
+  const [ins, setIns] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [proposal, setProposal] = useState("");
+  const generate = (a) => {
+    setPhase("loading");
+    setTimeout(() => { setProposal(proposeRewrite(block, ins, a)); setPhase("preview"); }, 1200);
+  };
+  const chips = ["Deixe mais curto", "Tom mais leve", "Mais direto para o cliente", "Termine com uma frase de efeito"];
+  if (phase === "loading") {
+    return (
+      <Modal title="Reescrever bloco" eyebrow={block.title} dismissible={false} onClose={() => {}}>
+        <div className="row" style={{ gap: 12 }}><span className="spinner" aria-hidden="true" /><span aria-live="polite">Escrevendo uma proposta a partir da sua instrução…</span></div>
+        <p className="hint">Processamento simulado. O texto atual não muda até você aplicar.</p>
+      </Modal>
+    );
+  }
+  if (phase === "preview") {
+    return (
+      <Modal wide title="Reescrever bloco" eyebrow={block.title} onClose={onClose} footer={<>
+        <Button variant="tertiary" onClick={onClose}>Descartar proposta</Button>
+        <Button variant="secondary" icon="refresh" onClick={() => { const a = attempt + 1; setAttempt(a); generate(a); }}>Gerar outra proposta</Button>
+        <Button variant="primary" icon="check" onClick={() => onApply(proposal, ins)}>Aplicar como nova versão</Button>
+      </>}>
+        <p className="small muted">Instrução: “{ins}”</p>
+        <div className="proposal-grid">
+          <div className="proposal-col"><span className="eyebrow">Versão atual</span><p>{block.body}</p></div>
+          <div className="proposal-col ai"><OriginBadge origin="ai" label="Proposta da IA" /><p>{proposal}</p></div>
+        </div>
+        <p className="hint">Aplicar cria uma nova versão do bloco. A versão atual fica no histórico.</p>
+      </Modal>
+    );
+  }
+  return (
+    <Modal title="Reescrever bloco" eyebrow={block.title} onClose={onClose} footer={<>
+      <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+      <Button variant="ai" icon="sparkles" reason={ins.trim() ? null : "Escreva uma instrução para a IA"} onClick={() => generate(attempt)}>Gerar proposta</Button>
+    </>}>
+      <div className="field">
+        <label htmlFor="rw-ins">O que você quer mudar?</label>
+        <textarea id="rw-ins" className="textarea" rows={3} value={ins} placeholder="Ex.: deixe mais curto e mais direto para o cliente" onChange={(e) => setIns(e.target.value)} />
+      </div>
+      <div className="row">{chips.map((c) => <button key={c} type="button" className="chip-btn" onClick={() => setIns(c)}>{c}</button>)}</div>
+      <p className="hint">Você vai ver a proposta ao lado do texto atual antes de decidir.</p>
+    </Modal>
+  );
+}
+function authorBadge(b) {
+  if (b.author === "user") return <Badge tone="edited" icon="user">Escrito por você</Badge>;
+  if (b.author === "ai-applied") return <Badge tone="ai" icon="sparkles">Reescrito com IA · aplicado por você</Badge>;
+  return <OriginBadge origin="ai" label="Gerado com IA" />;
+}
+function PresentationScreen({ job, update, go, toast, decide, logAI, openDemo }) {
+  const pres = job.presentations.find((p) => p.id === job.currentPres);
+  const [draft, setDraft] = useState(null);
+  const [rewrite, setRewrite] = useState(false);
+  const [openVer, setOpenVer] = useState(null);
+  const [hideConfirm, setHideConfirm] = useState(null);
+  useEffect(() => { setDraft(null); setOpenVer(null); }, [pres && pres.selected]);
+  if (!job.analyzed) return <NotStartedStage title="Apresentação" job={job} go={go} openDemo={openDemo} />;
+  if (!pres) {
+    return (
+      <div className="content-inner">
+        <PageHead title="Apresentação" />
+        <div className="card"><EmptyState icon="monitor" title="Nenhuma apresentação criada" action={<Button variant="primary" iconRight="arrowRight" onClick={() => go("finalists")}>Ir para Finalistas</Button>}>A apresentação só é criada quando você confirma os finalistas. Nada é gerado automaticamente.</EmptyState></div>
+      </div>
+    );
+  }
+  const block = pres.blocks.find((b) => b.id === pres.selected) || pres.blocks[0];
+  const visible = pres.blocks.filter((b) => !b.hidden);
+  const setPres = (fn, what) => {
+    update((j) => ({ ...j, presentations: j.presentations.map((p) => (p.id === pres.id ? { ...fn(p), version: p.version + 1 } : p)) }));
+    if (what) decide(what, "Apresentação");
+  };
+  const select = (id) => update((j) => ({ ...j, presentations: j.presentations.map((p) => (p.id === pres.id ? { ...p, selected: id } : p)) }));
+  const setBlock = (id, patch) => (p) => ({ ...p, blocks: p.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) });
+  const move = (i, d) => setPres((p) => { const bl = [...p.blocks]; const [x] = bl.splice(i, 1); bl.splice(i + d, 0, x); return { ...p, blocks: bl }; }, `Reordenou o bloco “${pres.blocks[i].title}”`);
+  const duplicate = (b) => {
+    const copy = { ...b, id: newId("b"), title: b.title + " (cópia)", versions: [...b.versions] };
+    setPres((p) => { const i = p.blocks.findIndex((x) => x.id === b.id); const bl = [...p.blocks]; bl.splice(i + 1, 0, copy); return { ...p, blocks: bl, selected: copy.id }; }, `Duplicou o bloco “${b.title}”`);
+    toast("Bloco duplicado logo abaixo do original.");
+  };
+  const toggleHide = (b) => { setPres(setBlock(b.id, { hidden: !b.hidden }), `${b.hidden ? "Restaurou" : "Ocultou"} o bloco “${b.title}”`); toast(b.hidden ? "Bloco restaurado na apresentação." : "Bloco oculto. Ele continua na lista e pode ser restaurado."); };
+  const cur = draft || { title: block.title, body: block.body };
+  const dirty = draft && (draft.title !== block.title || draft.body !== block.body);
+  const saveDraft = () => {
+    const n = block.versions.length + 1;
+    setPres(setBlock(block.id, { title: draft.title, body: draft.body, author: "user", versions: [...block.versions, { n, label: "Editado por você", body: draft.body, author: "user" }] }), `Editou o bloco “${block.title}”`);
+    setDraft(null);
+    toast(`Versão ${n} do bloco salva.`);
+  };
+  const applyRewrite = (text, ins) => {
+    const n = block.versions.length + 1;
+    setPres(setBlock(block.id, { body: text, author: "ai-applied", versions: [...block.versions, { n, label: `Reescrito com IA, aplicado por você · “${ins}”`, body: text, author: "ai-applied" }] }), `Aplicou uma reescrita da IA no bloco “${block.title}”`);
+    logAI(`Propôs uma reescrita para “${block.title}”`, "Apresentação");
+    setRewrite(false);
+    setDraft(null);
+    toast(`Versão ${n} aplicada. A versão anterior continua no histórico.`);
+  };
+  const idx = pres.blocks.findIndex((b) => b.id === block.id);
+  const visIdx = visible.findIndex((b) => b.id === block.id);
+  return (
+    <div className="content-inner" style={{ maxWidth: 1180 }}>
+      <PageHead
+        eyebrow={`${pres.name} · versão ${pres.version} · criada ${pres.createdAt}`}
+        title="Apresentação"
+        lede="Texto estruturado para revisar e ajustar. A diagramação dos slides fica fora deste protótipo."
+        actions={job.presentations.length > 1 && (
+          <><label htmlFor="pres-pick" className="sr-only">Escolher apresentação</label>
+          <select id="pres-pick" className="select" style={{ width: 220 }} value={pres.id} onChange={(e) => update((j) => ({ ...j, currentPres: e.target.value }))}>
+            {job.presentations.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select></>
+        )}
+      />
+      <div className="pres">
+        <section className="card" aria-label="Estrutura de blocos">
+          <div className="between" style={{ padding: "14px 16px 6px" }}>
+            <h2>Blocos</h2>
+            <span className="small muted">{visible.length} de {pres.blocks.length} visíveis</span>
+          </div>
+          <ol className="block-list">
+            {pres.blocks.map((b, i) => (
+              <li key={b.id} className={`block-item${b.hidden ? " hidden-block" : ""}`} data-selected={b.id === block.id}>
+                <button type="button" className="block-select" aria-current={b.id === block.id ? "true" : undefined} onClick={() => select(b.id)}>
+                  <span className="pos">{i + 1}</span>
+                  <span className="stack" style={{ gap: 2 }}>
+                    <span className="t">{b.title}</span>
+                    <span className="small muted">{b.hidden ? "Oculto" : b.author === "user" ? "Escrito por você" : b.author === "ai-applied" ? "IA · aplicado por você" : "Gerado com IA"} · v{b.versions.length}</span>
+                  </span>
+                </button>
+                <div className="block-tools">
+                  <IconButton icon="arrowUp" label={`Mover “${b.title}” para cima`} disabled={i === 0} onClick={() => move(i, -1)} />
+                  <IconButton icon="arrowDown" label={`Mover “${b.title}” para baixo`} disabled={i === pres.blocks.length - 1} onClick={() => move(i, 1)} />
+                  <IconButton icon="copy" label={`Duplicar “${b.title}”`} onClick={() => duplicate(b)} />
+                  <IconButton icon={b.hidden ? "eye" : "eyeOff"} label={b.hidden ? `Restaurar “${b.title}”` : `Ocultar “${b.title}”`} onClick={() => (b.hidden ? toggleHide(b) : setHideConfirm(b))} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+        <section className="card card-pad stack-16" aria-label="Editor do bloco">
+          <div className="between">
+            <div className="badges">{authorBadge(block)}{block.hidden && <Badge tone="discard" icon="eyeOff">Oculto na apresentação</Badge>}</div>
+            <Button size="sm" variant="ai" icon="sparkles" onClick={() => setRewrite(true)}>Reescrever com IA</Button>
+          </div>
+          <div className="field">
+            <label htmlFor="blk-title">Título do bloco</label>
+            <input id="blk-title" className="input" value={cur.title} onChange={(e) => setDraft({ ...cur, title: e.target.value })} />
+          </div>
+          <div className="field">
+            <label htmlFor="blk-body">Texto</label>
+            <textarea id="blk-body" className="textarea" rows={9} value={cur.body} onChange={(e) => setDraft({ ...cur, body: e.target.value })} />
+          </div>
+          {dirty && (
+            <div className="between alert alert-info" style={{ alignItems: "center" }}>
+              <span>Alterações não salvas. Salvar cria a versão {block.versions.length + 1}.</span>
+              <span className="row"><Button size="sm" variant="tertiary" onClick={() => setDraft(null)}>Descartar alterações</Button><Button size="sm" variant="primary" icon="check" onClick={saveDraft}>Salvar versão</Button></span>
+            </div>
+          )}
+          <div className="stack">
+            <h2 style={{ fontSize: 14 }}>Histórico do bloco · {block.versions.length} {block.versions.length === 1 ? "versão" : "versões"}</h2>
+            <ul className="versions">
+              {[...block.versions].reverse().map((v) => (
+                <li key={v.n} className={v.n === block.versions.length ? "current" : ""}>
+                  <div className="between">
+                    <span className="row"><strong>v{v.n}</strong><span className="small">{v.label}</span></span>
+                    {v.n === block.versions.length ? <Badge tone="edited">Atual</Badge> : <Button size="sm" variant="tertiary" icon="eye" aria-expanded={openVer === v.n} onClick={() => setOpenVer(openVer === v.n ? null : v.n)}>{openVer === v.n ? "Ocultar" : "Ver texto"}</Button>}
+                  </div>
+                  {openVer === v.n && <p className="prev-text">{v.body}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+        <section className="stack-16" aria-label="Prévia do slide">
+          <div className="card card-pad stack">
+            <div className="between"><h2>Prévia</h2><span className="small muted">{block.hidden ? "Fora da apresentação" : `Slide ${visIdx + 1} de ${visible.length}`}</span></div>
+            <div className="slide" aria-label={`Prévia do slide ${cur.title}`}>
+              <span className="s-eyebrow">{job.client} · {job.name}</span>
+              <span className="s-title">{cur.title}</span>
+              <span className="s-body">{cur.body}</span>
+              <span className="s-num">{String(idx + 1).padStart(2, "0")}</span>
+              {block.hidden && <span className="s-hidden">Oculto na apresentação</span>}
+            </div>
+            <p className="hint">Prévia simplificada do texto. Sem diagramação final.</p>
+          </div>
+          <div className="card card-pad stack">
+            <h2>Finalistas nesta apresentação</h2>
+            {pres.finalists.map((f, i) => <span key={f} className="row small"><span className="rank" style={{ width: 22, height: 22, fontSize: 11 }}>{i + 1}</span>{f}</span>)}
+          </div>
+        </section>
+      </div>
+      {rewrite && <RewriteModal block={block} onClose={() => setRewrite(false)} onApply={applyRewrite} />}
+      {hideConfirm && (
+        <ConfirmDiscard what={`o bloco “${hideConfirm.title}” da apresentação`} confirmLabel="Ocultar bloco" detail="O bloco sai da apresentação, mas continua na lista de blocos com todas as versões. Você pode restaurá-lo." onClose={() => setHideConfirm(null)} onConfirm={() => { toggleHide(hideConfirm); setHideConfirm(null); }} />
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen 9: Job summary                                               */
+/* ------------------------------------------------------------------ */
+function SummaryScreen({ job, go, toast, resetDemo }) {
+  const [confirmReset, setConfirmReset] = useState(false);
+  const st = stageStatus(job);
+  const openQ = job.analysis.filter((i) => i.kind === "question" && i.status === "open");
+  const chosen = job.combos.filter((c) => c.state === "chosen");
+  const livePaths = job.paths.filter((p) => !p.discarded);
+  const counts = {
+    briefing: `Versão ${job.briefVersion}`,
+    analysis: `${job.analysis.filter((i) => i.kind === "fact").length} fatos · ${job.analysis.filter((i) => i.kind === "hyp").length} hipóteses · ${openQ.length} dúvidas em aberto`,
+    material: `${job.materials.filter((m) => !m.discarded && isUsed(m)).length} itens selecionados`,
+    combos: `${chosen.length} escolhida${chosen.length === 1 ? "" : "s"} de ${job.combos.filter((c) => c.state !== "discarded").length}`,
+    paths: `${livePaths.length} caminhos`,
+    finalists: `${job.finalistOrder.length} finalista${job.finalistOrder.length === 1 ? "" : "s"}`,
+    presentation: `${job.presentations.length} apresentaç${job.presentations.length === 1 ? "ão" : "ões"}`,
+  };
+  if (!job.analyzed) {
+    counts.briefing = `Versão ${job.briefVersion} · rascunho`;
+    STAGES.slice(1).forEach((s) => { counts[s.id] = "depende da análise"; });
+  }
+  const pending = [];
+  if (!job.analyzed) pending.push({ text: "Análise não disponível neste protótipo para briefings novos. O job continua como rascunho.", go: "briefing" });
+  openQ.forEach((q) => pending.push({ text: `Dúvida em aberto: “${q.text}”`, go: "analysis" }));
+  if (!materialCheck(job.materials).ok) pending.push({ text: "A matéria prima tem requisitos pendentes.", go: "material" });
+  if (job.combos.length && !chosen.length) pending.push({ text: "Nenhuma combinação escolhida.", go: "combos" });
+  if (livePaths.length && !job.finalistOrder.length) pending.push({ text: "Nenhum caminho marcado como finalista.", go: "paths" });
+  if (job.finalistOrder.length && !job.presentations.length) pending.push({ text: "Finalistas prontos, apresentação ainda não criada.", go: "finalists" });
+  const resume = !job.analyzed ? "briefing" : st.paths === "current" || !job.paths.length ? "paths" : STAGES.find((s) => st[s.id] === "current")?.id || "paths";
+  const statusText = { done: "Concluída", current: "Em andamento", todo: "Não iniciada" };
+  return (
+    <div className="content-inner">
+      <PageHead
+        eyebrow={job.demo ? "Resumo do job · demonstração com dados simulados" : "Resumo do job · rascunho"}
+        title={job.name}
+        actions={<>
+          {job.demo && <Button variant="secondary" icon="refresh" onClick={() => setConfirmReset(true)}>Reiniciar demonstração</Button>}
+          <Button variant="primary" iconRight="arrowRight" onClick={() => go(resume)}>Continuar de onde parei</Button>
+        </>}
+      >
+        <div className="row small muted"><span>Cliente: <strong style={{ color: "var(--text)" }}>{job.client}</strong></span><span>·</span><span>Última atualização: {job.updatedAt}</span></div>
+        <div style={{ maxWidth: 360 }}><ProgressBar value={jobProgress(job)} label="Progresso geral" /></div>
+      </PageHead>
+      <div className="split">
+        <div className="stack-16">
+          <section className="card card-pad stack" aria-labelledby="tl-h">
+            <h2 id="tl-h">Etapas</h2>
+            <ol className="timeline">
+              {STAGES.map((s, i) => (
+                <li key={s.id} className="tl-item">
+                  <span className={`tl-dot ${st[s.id]}`} aria-hidden="true">{st[s.id] === "done" ? <Icon name="check" size={12} /> : i + 1}</span>
+                  <span className="stack" style={{ gap: 2 }}>
+                    <strong>{s.label}</strong>
+                    <span className="small muted">{statusText[st[s.id]]} · {counts[s.id]}</span>
+                  </span>
+                  {st[s.id] === "done" ? <Button size="sm" variant="secondary" icon="undo" onClick={() => go(s.id)}>Reabrir</Button> : st[s.id] === "current" ? <Button size="sm" variant="primary" onClick={() => go(s.id)}>Abrir</Button> : <Button size="sm" variant="tertiary" reason="Conclua as etapas anteriores primeiro">Abrir</Button>}
+                </li>
+              ))}
+            </ol>
+          </section>
+          <div className="grid-2">
+            <section className="card card-pad stack" aria-labelledby="dec-h">
+              <div className="between"><h2 id="dec-h">Suas decisões recentes</h2><HumanBadge icon="user">Você</HumanBadge></div>
+              {job.decisions.length ? (
+                <ul className="log">{job.decisions.slice(0, 6).map((d, i) => <li key={i}><span className="log-icon human"><Icon name="check" size={13} /></span><span className="stack" style={{ gap: 0 }}><span>{d.text}</span><span className="small muted">{d.stage} · {d.at}</span></span></li>)}</ul>
+              ) : <p className="small muted">Nenhuma decisão registrada ainda.</p>}
+            </section>
+            <section className="card card-pad stack" aria-labelledby="ai-h">
+              <div className="between"><h2 id="ai-h">Atividade da IA</h2><OriginBadge origin="ai" label="IA" /></div>
+              {job.aiLog.length ? (
+                <ul className="log">{job.aiLog.slice(0, 6).map((d, i) => <li key={i}><span className="log-icon ai"><Icon name="sparkles" size={13} /></span><span className="stack" style={{ gap: 0 }}><span>{d.text}</span><span className="small muted">{d.stage} · {d.at}</span></span></li>)}</ul>
+              ) : <p className="small muted">Nenhuma atividade da IA ainda.</p>}
+              <p className="hint">A IA propõe e gera. Nenhuma entrada aqui é uma decisão.</p>
+            </section>
+          </div>
+        </div>
+        <aside className="sticky-col">
+          <section className="card card-pad stack" aria-labelledby="pend-h">
+            <h2 id="pend-h">Pendências</h2>
+            {pending.length ? pending.map((p, i) => (
+              <div key={i} className="between alert alert-warn" style={{ alignItems: "center" }}>
+                <span className="row" style={{ flexWrap: "nowrap", alignItems: "flex-start" }}><Icon name="alert" size={16} /><span>{p.text}</span></span>
+                <Button size="sm" variant="tertiary" onClick={() => go(p.go)}>Ver</Button>
+              </div>
+            )) : <Alert tone="ok">Nada pendente.</Alert>}
+          </section>
+          <section className="card card-pad stack" aria-labelledby="pres-h">
+            <h2 id="pres-h">Apresentações</h2>
+            {job.presentations.length ? job.presentations.map((p) => (
+              <div key={p.id} className="between chip">
+                <span className="stack" style={{ gap: 0 }}><strong>{p.name}</strong><span className="small muted">Versão {p.version} · {p.blocks.filter((b) => !b.hidden).length} blocos · {p.createdAt}</span></span>
+                <Button size="sm" variant="secondary" onClick={() => go("presentation")}>Abrir</Button>
+              </div>
+            )) : <p className="small muted">Nenhuma apresentação ainda. Ela é criada a partir dos finalistas, com a sua confirmação.</p>}
+          </section>
+        </aside>
+      </div>
+      {confirmReset && (
+        <Modal title="Reiniciar demonstração" onClose={() => setConfirmReset(false)} footer={<>
+          <Button variant="secondary" onClick={() => setConfirmReset(false)}>Cancelar</Button>
+          <Button variant="danger" icon="refresh" onClick={() => { resetDemo(); setConfirmReset(false); toast("Demonstração Brisa reiniciada do início."); }}>Reiniciar</Button>
+        </>}>
+          <p>A demonstração Brisa volta ao começo: análise sem confirmações, matéria prima sem seleção, nenhuma combinação escolhida e nenhum caminho gerado.</p>
+          <Alert tone="info">Só a demonstração muda. Seus rascunhos continuam como estão.</Alert>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* App                                                                 */
+/* ------------------------------------------------------------------ */
+function App() {
+  const [screen, setScreen] = useState("jobs");
+  // Every job is its own object, keyed by id. Brisa is the only demonstration job.
+  const [jobs, setJobs] = useState(() => ({ brisa: makeJob(true) }));
+  const [order, setOrder] = useState(["brisa"]);
+  const [activeId, setActiveId] = useState("brisa");
+  const [toasts, setToasts] = useState([]);
+  const [legend, setLegend] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_FORM, files: [] });
+  const job = jobs[activeId] || jobs.brisa;
+  const jobId = job.id;
+  const inJob = !["jobs", "new"].includes(screen);
+
+  const go = (s) => { setScreen(s); window.scrollTo(0, 0); };
+  const toast = (text, tone = "ok") => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, text, tone }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4200);
+  };
+  // All writes name the job they belong to. Nothing writes to "the current job" implicitly.
+  const updateJob = (id, fn) => setJobs((js) => (js[id] ? { ...js, [id]: { ...fn(js[id]), id, updatedAt: nowLabel() } } : js));
+  const update = (fn) => updateJob(jobId, fn);
+  const decide = (text, stage) => updateJob(jobId, (j) => ({ ...j, decisions: [{ text, stage, at: nowLabel() }, ...j.decisions] }));
+  const logAI = (text, stage) => updateJob(jobId, (j) => ({ ...j, aiLog: [{ text, stage, at: nowLabel() }, ...j.aiLog] }));
+
+  const openJob = (id, s = "summary") => { setActiveId(id); go(s); };
+  const createDraft = (f) => {
+    const d = makeDraftJob(f);
+    setJobs((js) => ({ ...js, [d.id]: d }));
+    setOrder((o) => [d.id, ...o]);
+    setActiveId(d.id);
+    setForm({ ...EMPTY_FORM, files: [] });
+    return d.id;
+  };
+  const saveDraft = (id, f) => updateJob(id, (j) => ({ ...j, name: f.name.trim(), client: f.client.trim(), brief: f.brief, files: f.files.map((x) => ({ ...x })), decisions: [{ text: "Salvou alterações no briefing", stage: "Briefing", at: nowLabel() }, ...j.decisions] }));
+  const deleteDraft = (id) => {
+    if (id === "brisa") return;
+    setOrder((o) => o.filter((x) => x !== id));
+    setJobs((js) => { const n = { ...js }; delete n[id]; return n; });
+    if (activeId === id) setActiveId("brisa");
+  };
+  const openDemo = (fromName) => {
+    openJob("brisa");
+    toast(fromName ? `Demonstração Brisa aberta. O rascunho “${fromName}” continua separado em Jobs.` : "Demonstração Brisa aberta.");
+  };
+  const resetDemo = () => setJobs((js) => ({ ...js, brisa: { ...makeJob(false), decisions: [{ text: "Reiniciou a demonstração do início", stage: "Resumo", at: nowLabel() }] } }));
+
+  const props = { job, update, go, toast, decide, logAI, openDemo };
+  let body;
+  switch (screen) {
+    case "jobs": body = <JobsScreen jobsList={order.map((id) => jobs[id]).filter(Boolean)} go={go} openJob={openJob} deleteDraft={deleteDraft} toast={toast} />; break;
+    case "new": body = <NewJobScreen mode="new" job={null} form={form} setForm={setForm} go={go} toast={toast} createDraft={createDraft} saveDraft={saveDraft} openDemo={openDemo} onReanalyzed={() => {}} />; break;
+    case "briefing": body = <BriefingWrap key={job.id} job={job} go={go} toast={toast} createDraft={createDraft} saveDraft={saveDraft} openDemo={openDemo} onReanalyzed={() => { logAI("Reanalisou o briefing (resultado simulado)", "Análise"); go("analysis"); }} />; break;
+    case "summary": body = <SummaryScreen job={job} go={go} toast={toast} resetDemo={resetDemo} />; break;
+    case "analysis": body = <AnalysisScreen {...props} />; break;
+    case "material": body = <MaterialScreen {...props} />; break;
+    case "combos": body = <CombosScreen {...props} />; break;
+    case "paths": body = <PathsScreen {...props} />; break;
+    case "finalists": body = <FinalistsScreen {...props} />; break;
+    case "presentation": body = <PresentationScreen {...props} />; break;
+    default: body = null;
+  }
+  return (
+    <div className="app">
+      <Sidebar screen={screen} go={go} job={job} inJob={inJob} />
+      <div className="main">
+        <TopBar screen={screen} go={go} job={job} inJob={inJob} openLegend={() => setLegend(true)} />
+        <main className="content" id="main" key={job.id + ":" + screen}>{body}</main>
+      </div>
+      <Toasts toasts={toasts} dismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
+      {legend && <LegendPanel onClose={() => setLegend(false)} />}
+    </div>
+  );
+}
+function BriefingWrap({ job, ...rest }) {
+  const [form, setForm] = useState({ name: job.name, client: job.client, brief: job.brief, files: job.files.map((f) => ({ ...f })) });
+  return <NewJobScreen mode="briefing" job={job} form={form} setForm={setForm} {...rest} />;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
