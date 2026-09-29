@@ -6,7 +6,9 @@ This package is self-contained: every rule needed to derive a test is stated her
 
 **Revision 2.** Four further product decisions, **R1** to **R4** (Appendix B), resolve former issues C-1, C-2, OI-3 and OI-16. Criteria that depend only on those decisions no longer carry a default marker.
 
-**Revision 3.** Decisions **R5** to **R8** (Appendix B) resolve C-3, OI-21 and OI-22, and confirm the retry reading of AC-COMB-029. They also expose one new contradiction (C-4) and two new gaps (OI-23, OI-24), described in §13.
+**Revision 3.** Decisions **R5** to **R8** (Appendix B) resolve C-3, OI-21 and OI-22, and confirm the retry reading of AC-COMB-029. They also exposed C-4, OI-23 and OI-24.
+
+**Revision 4.** Decisions **R9** to **R11** (Appendix B) resolve C-4, OI-23 and OI-24. They expose one new contradiction (C-5) and three new gaps (OI-25 to OI-27), described in §13.
 
 ---
 
@@ -50,6 +52,7 @@ This package is self-contained: every rule needed to derive a test is stated her
 | **Projection** | Derived, rebuildable state: current selections, flags, warnings, drift. It is never the source of truth. |
 | **job_sequence** | Per-job, strictly increasing, gap-free integer assigned to each append-only record a command creates. |
 | **job_version** | The highest `job_sequence` committed in the job. |
+| **Idempotency record** | Technical record, outside the domain, that stores each processed `command_id` with a fingerprint of its payload and the outcome returned (accepted, with the created record IDs; or rejected, with the error code and response). It is **not domain state**: it has no `job_sequence`, never changes `job_version`, is never read by projections or replay, and never appears in job history. [R10] |
 | **policy_version** | Version of the policy configuration active when a record or event was accepted. |
 
 ### 1.3 Standard outcomes
@@ -58,7 +61,7 @@ These names are used in the criteria below so each one does not have to repeat t
 
 | Outcome | Observable meaning |
 |---|---|
-| **REJECT(code)** | The command fails with error `code`. Zero domain records are committed, `job_version` is unchanged, and the projection is unchanged. |
+| **REJECT(code)** | The command fails with error `code`. Zero domain records are committed or modified (ContentItem, ContentRevision, ContentRelation, EvidenceLink, DecisionEvent, GenerationRequest, GenerationRun, PresentationVersion and their children); `job_version` and the projection are unchanged. The only write is the **idempotency record** of its `command_id` with the rejection result (AC-GLOBAL-029). [R10] |
 | **DROP** | (AI output only) The output element is not persisted as content. The raw response stays on the run, and the run's validation report lists the element with a reason. |
 | **DOWNGRADE** | (AI output only) The element is persisted with the weaker assertion for its type (§4.3), plus the warning `claimed_fact_unverified`. |
 | **WARN(kind)** | The command succeeds and the projection shows a warning of `kind`. No event is written. |
@@ -98,8 +101,8 @@ business_problem, communication_problem, audience, human_truth, human_tension, c
 | AC-GLOBAL-007 | References whose meaning depends on wording store an exact revision ID: `ContentRelation.to_revision_id`, content RunInputs, `PresentationBlockReference.content_revision_id`, and the target of revision-scoped decisions. | none | A reference given only as an item ID is refused. | REJECT(E_REVISION_REQUIRED) | DB | U |
 | AC-GLOBAL-008 | Every denormalized item ID equals the item of the referenced revision (`ContentRelation.to_item_id`, `DecisionEvent` item and revision pair). | none | A mismatched pair is refused. | REJECT(E_REFERENCE_MISMATCH) | DB | I |
 | AC-GLOBAL-009 | Creating a newer revision never changes any existing reference to an older one. | Relations, RunInputs, block references and decisions pin r1; r2 is then created | Every reference still points to r1. | n/a | APP | P |
-| AC-GLOBAL-010 | Re-submitting a command with the same `command_id` and an identical payload returns the original result and writes nothing. | Command C was accepted | The second response equals the first (same record IDs, same `job_sequence` range); `job_version` is unchanged. | n/a | APP | I |
-| AC-GLOBAL-011 | Re-using a `command_id` with a different payload is refused. | Command C was accepted | The new payload is refused. | REJECT(E_COMMAND_ID_CONFLICT) | APP | I |
+| AC-GLOBAL-010 | Re-submitting a command with the same `command_id` and an identical payload returns the original result and writes nothing, whether C was accepted or rejected (for rejected commands, see AC-GLOBAL-030). [R10] | Command C was processed | The second response equals the first (accepted: same record IDs and `job_sequence` range; rejected: same error code and response); `job_version` is unchanged. | n/a | APP | I |
+| AC-GLOBAL-011 | Re-using a `command_id` with a different payload is refused, whether the original command was accepted or rejected. The conflict response does not change the stored idempotency record. [R10] | Command C was processed | The new payload is refused. | REJECT(E_COMMAND_ID_CONFLICT) | APP | I |
 | AC-GLOBAL-012 | `job_sequence` is unique, strictly increasing and gap-free per job. It is assigned to every SourceVersion, ContentRevision, DecisionEvent, GenerationRequest, GenerationRun and PresentationVersion. **[Default OI-20]** for runs and presentation versions. | Any command history | The sequences committed in a job form exactly 1..job_version. | n/a | DB | P |
 | AC-GLOBAL-013 | Records created by one command get consecutive `job_sequence` values in write order. A failed command consumes none. | A command writing k records | They hold n+1..n+k; after a failed command, the next accepted record holds n+1. | n/a | DB | I |
 | AC-GLOBAL-014 | Replay order is `job_sequence` only; timestamps are never used for ordering. | Events with identical or reversed `created_at` values | The projection built from the log is identical whatever the timestamps. | n/a | PROJ | P |
@@ -117,6 +120,9 @@ business_problem, communication_problem, audience, human_truth, human_tension, c
 | AC-GLOBAL-026 | After anonymization (text scrubbed, structure kept), rebuilding the projection gives identical selection, rejection, favorite and discard state. | Anonymized job | The rebuilt projection's text-independent fields equal those before anonymization. | n/a | PROJ | I |
 | AC-GLOBAL-027 | Deleting the whole projection and rebuilding it from the log reproduces it exactly. | Any history | The rebuilt projection equals the stored one field by field. | See AC-ERR-013 | PROJ | P |
 | AC-GLOBAL-028 | Every ContentRevision, DecisionEvent, GenerationRequest and PresentationVersion records the `policy_version` active when it was accepted. | none | The field is non-null and equals the active version at commit. | Insert without it fails | DB | U |
+| AC-GLOBAL-029 | **Rejected commands are recorded for idempotency only.** Every command rejected by a domain rule stores an idempotency record of its `command_id`, payload fingerprint and rejection result. No domain record is created or modified. [R10] | Any rejected command | The idempotency record exists; domain record counts and hashes, `job_version` and projection are unchanged. | n/a | APP | P |
+| AC-GLOBAL-030 | **Replaying a rejected command does not re-execute it.** Re-submitting a rejected `command_id` with the identical payload returns the stored rejection, even if the command would now succeed (e.g. the missing evidence or `chosen` role now exists). [R10] | Command C rejected with E_COMBINATION_NOT_CHOSEN; K r1 is chosen afterwards | Same rejection returned; no validation runs; nothing written. | n/a | APP | I |
+| AC-GLOBAL-031 | **Domain state and the idempotency record are separate.** A full projection rebuild, a replay of the log and every history read ignore idempotency records; deleting them changes no domain record or projection. Idempotency records are never counted as domain records in any criterion of this document. [R10] | Any history | Rebuild and history outputs are identical with and without idempotency records. | n/a | PROJ | P |
 
 ---
 
@@ -244,8 +250,8 @@ The 71 forbidden triples break down as follows (a cross-check for the test gener
 | AC-CONTENT-029 | `user_edit`, `relink` and `ai_rewrite` on a discarded item are refused. **[Default OI-4]** | Item discarded | none | REJECT(E_ITEM_DISCARDED) | APP | I |
 | AC-CONTENT-030 | Every AI-produced revision has `authorship = ai`, `produced_by_run_id` set, and `change_type` of `initial` (new item) or `ai_rewrite`. | Run commit | Fields as stated. | n/a | DB+APP | I |
 | AC-CONTENT-031 | **No silent reclassification of human content.** Every user command that creates a revision declares `assertion_type`, and the stored value always equals the declared one. The system never replaces a user's declared `extracted_fact` with `hypothesis`, `human_text` or any other value. [R4] | Generated user commands | For every accepted command, stored assertion = declared assertion. | Any other outcome is a defect | APP | P |
-| AC-CONTENT-032 | **No partial writes after a rejected fact.** A rejected user fact command creates no ContentItem, ContentRevision, EvidenceLink, ContentRelation or DecisionEvent, and leaves `job_version` and the projection unchanged. This holds even when the command also carried selection-move events or relations. [R4] | Edit of a selected fact declaring `extracted_fact` with an invalid quote | Record counts, `job_version` and projection are identical before and after. | n/a | APP | P |
-| AC-CONTENT-033 | The rejection response for E_EVIDENCE_REQUIRED or E_EVIDENCE_INVALID lists the alternative assertion types the user may resubmit with. Accepting one requires a **new** command with the chosen assertion declared explicitly. The system never resubmits on the user's behalf. [R4, R5] The list is exactly the user assertions allowed for the item's type other than `extracted_fact`: `human_text` and `hypothesis` for the eight descriptive types; `human_text` only for central_message. | Rejected fact command | The response contains the list; zero records are written until a new command arrives. | n/a | APP | I |
+| AC-CONTENT-032 | **No partial writes after a rejected fact.** A rejected user fact command creates no ContentItem, ContentRevision, EvidenceLink, ContentRelation or DecisionEvent, and leaves `job_version` and the projection unchanged. This holds even when the command also carried selection-move events or relations. Only the idempotency record is written (AC-GLOBAL-029). [R4, R10] | Edit of a selected fact declaring `extracted_fact` with an invalid quote | Record counts, `job_version` and projection are identical before and after. | n/a | APP | P |
+| AC-CONTENT-033 | The rejection response for E_EVIDENCE_REQUIRED or E_EVIDENCE_INVALID lists the alternative assertion types the user may resubmit with. Accepting one requires a **new** command, with a **new `command_id`**, declaring the chosen assertion explicitly. Re-using the rejected command's `command_id` for it is an idempotency conflict (AC-GLOBAL-011). The system never resubmits on the user's behalf. [R4, R5, R10] The list is exactly the user assertions allowed for the item's type other than `extracted_fact`: `human_text` and `hypothesis` for the eight descriptive types; `human_text` only for central_message. | Rejected fact command | The response contains the list; zero domain records are written until a new command arrives. | Alternative sent with the rejected `command_id`: REJECT(E_COMMAND_ID_CONFLICT) | APP | I |
 | AC-CONTENT-034 | A `user` + `hypothesis` revision is accepted on the eight descriptive types with 0..N EvidenceLinks; each link must satisfy AC-EVID-001. [R5] | User command on audience | Stored as `user` + `hypothesis`. | Invalid link: REJECT(E_EVIDENCE_INVALID), nothing stored | APP | U |
 | AC-CONTENT-035 | **No silent reclassification after a rejected fact.** After a user fact command is rejected, no revision with `hypothesis`, `human_text` or any other assertion exists for that content unless a separate, later user command declared it. The rejection itself never creates one, and the server never submits the alternative. [R4, R5] | Rejected fact command followed by no further command | Zero revisions for the content. | Any stored revision is a defect | APP | P |
 
@@ -309,16 +315,17 @@ Incoming cardinality is 0..N for every relation. The source is always the depend
 | AC-REL-040 | **based_on**: a creative_path revision has 0 or 1 edge, to a combination revision. | none | 0 or 1 accepted. | 2: REJECT(E_CARDINALITY) | APP | U |
 | AC-REL-041 | **based_on**: for an AI path from a `path_generation` request with a combination input, the command writes `based_on` to exactly that input revision. Any combination reference in the AI output is ignored. | Request with combination C r2 | Every path from the run has `based_on` = C r2. | n/a | APP | I |
 | AC-REL-042 | **based_on**: an AI path from a request with no combination input has no `based_on`. | none | Zero edges. | n/a | APP | U |
-| AC-REL-043 | **based_on**: no re-pin. A new path revision keeps the same target, and `relink` is not valid for creative_path. The carried target must still be chosen (AC-REL-056). | Path r1 based_on C r1; C r2 exists; C r1 still chosen | Edit gives path r2 with based_on C r1. | Changing the target: REJECT(E_REPIN_NOT_ALLOWED) | APP | U |
-| AC-REL-044 | **based_on** (AI paths): the target is always the request's combination input. That exact revision was `chosen` when the request was created (AC-COMB-024) and when each retry was submitted (AC-COMB-029). The edge is written at commit even if the combination lost `chosen` after the run started (AC-GEN-020). [R1, R6, R8] **[Default C-4]** for the commit-time exemption. | Request with chosen K r2 | Every AI path has based_on = K r2. | Unchosen at request creation: the request is refused (AC-COMB-024) | APP | I |
+| AC-REL-043 | **based_on**: no re-pin. A new path revision keeps the same target, and `relink` is not valid for creative_path. The carried target need not be chosen (AC-REL-056). **[Default C-5]** for the no-re-pin part as it relates to R11. | Path r1 based_on C r1; C r2 exists | Edit gives path r2 with based_on C r1. | Changing the target: REJECT(E_REPIN_NOT_ALLOWED) | APP | U |
+| AC-REL-044 | **based_on** (AI paths): the target is always the request's combination input. That exact revision was `chosen` when the request was created (AC-COMB-024) and when each retry was submitted (AC-COMB-029). The edge is written at commit even if the combination lost `chosen` after the run started; `chosen` is not re-validated at commit (AC-GEN-020, AC-GEN-028). [R1, R8, R9] | Request with chosen K r2 | Every AI path has based_on = K r2. | Unchosen at request creation: the request is refused (AC-COMB-024) | APP | I |
 | AC-REL-050 | **evaluates**: every memory_test and pr_headline revision has exactly one edge, to a creative_path revision. | none | Accepted. | 0 or 2: REJECT(E_CARDINALITY) | APP | U |
 | AC-REL-051 | **evaluates**: for AI tests from `path_evaluation`, the command writes the edge to the request's single `subject` revision. | Subject path P r2 | Every test from the run evaluates P r2. | n/a | APP | I |
 | AC-REL-052 | **evaluates**: no re-pin. Testing a newer path revision requires a new test item. | Test on P r1; P r2 exists | Edit gives test r2 still evaluating P r1. | Changing the target: REJECT(E_REPIN_NOT_ALLOWED) | APP | U |
 | AC-REL-053 | **evaluates**: a new test may not target a rejected path revision or a discarded path. | none | none | REJECT(E_TARGET_INACTIVE) | APP | U |
-| AC-REL-054 | **based_on** (user-written paths): every creative_path revision created by a user command with a `based_on` edge must target an exact combination revision that holds `chosen` in that same transaction. The check covers new items and new revisions alike. [R6] | K r1 not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN); no ContentItem, ContentRevision or ContentRelation is created | APP | I |
+| AC-REL-054 | **based_on** (user-written paths): when a user command creates a `based_on` edge **for the first time** (a new path item), its exact combination revision must hold `chosen` in that same transaction. Edits that carry the same exact target are covered by AC-REL-056; a changed target by AC-REL-058. [R6, R11] | K r1 not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN); no ContentItem, ContentRevision or ContentRelation is created | APP | I |
 | AC-REL-055 | A creative_path with no `based_on` edge is valid for every author and needs no combination check. [R6] | No chosen combination exists | A user path with no `based_on` is accepted. | n/a | APP | U |
-| AC-REL-056 | **Carried-forward based_on.** A `user_edit` of a path revision carries its `based_on` target unchanged (AC-REL-043). The command is accepted only if that exact target revision is still chosen. If it is not, the user must create a new path item. [R6] See OI-24. | Path P r1 based_on K r1; K r1 is no longer chosen (e.g. K r2 is chosen instead) | none | REJECT(E_COMBINATION_NOT_CHOSEN); P r2 is not created and P r1 is unchanged | APP | I |
-| AC-REL-057 | Choosing a newer revision of the same combination item does not satisfy the check for an older revision. `chosen` on K r2 never validates a `based_on` to K r1, and vice versa. [R6, R8] | K r2 chosen, K r1 not | based_on K r2 accepted. | based_on K r1: REJECT(E_COMBINATION_NOT_CHOSEN) | APP | U |
+| AC-REL-056 | **Carried-forward based_on.** A content-only edit of a path (`user_edit`, or an `ai_rewrite` from a request that does not use the combination directly) that keeps exactly the same `based_on` target revision is accepted whether or not that revision still holds `chosen`. The exception creates, transfers, restores or infers no decision role on any combination revision. The path's own selection follows AC-DEC-024 unchanged. [R11] | Path P r1 based_on K r1; K r1 no longer chosen (e.g. K r2 chosen instead) | P r2 created with based_on K r1; no DecisionEvent concerns K r1 or K r2. | n/a | APP | I |
+| AC-REL-057 | Wherever the `chosen` check applies (first creation of `based_on`, a changed target, a new request, a retry), choosing a newer revision of the same combination item does not satisfy it for an older revision. `chosen` on K r2 never validates K r1, and vice versa. [R6, R8, R11] | K r2 chosen, K r1 not | based_on K r2 accepted. | based_on K r1: REJECT(E_COMBINATION_NOT_CHOSEN) | APP | U |
+| AC-REL-058 | **Changed based_on target.** A command whose new path revision has a `based_on` target different from its source revision's target is refused. Within one path item this is already an identity change (AC-REL-043), so the command is refused with E_REPIN_NOT_ALLOWED whether or not the new target is chosen. A path on another combination revision is created as a new path item, where AC-REL-054 requires `chosen`. **[Default C-5]** | Path P r1 based_on K r1 | none | Target K2 r1 (unchosen or chosen): REJECT(E_REPIN_NOT_ALLOWED); no revision or relation created | APP | U |
 
 ---
 
@@ -495,14 +502,15 @@ Request kinds and their input and output tables are in §13 **[Default OI-10]**.
 | AC-GEN-017 | Every AI revision records `produced_by_run_id` (this run), `authorship = ai`, and the active `policy_version`. | none | Fields set. | n/a | DB | U |
 | AC-GEN-018 | Implied relations (`based_on`, `evaluates`) are written by the commit command from the request structure. | none | See AC-REL-041 and AC-REL-051. | n/a | APP | I |
 | AC-GEN-019 | The AI cannot create decisions: a run commit writes zero DecisionEvents whatever the output contains. | Output includes "select this" | Zero events. | n/a | APP | I |
-| AC-GEN-020 | Run outputs are committed even if their inputs were rejected, discarded, superseded or (for combinations) unselected while the run was executing. Rejected, discarded and superseded inputs are flagged. Losing `chosen` after the run started blocks neither the commit nor the `based_on` edge, writes no event, and never invalidates, discards or hides the outputs, which stay traceable to the exact input revision. This applies to every run that produces creative_path revisions. [R1, R8] **[Default C-4]** for reconciling this with R6. | Input discarded or unselected during the run | Outputs stored. | WARN(target_inactive) for rejected or discarded inputs | APP+PROJ | I |
+| AC-GEN-020 | Run outputs are committed even if their inputs were rejected, discarded, superseded or (for combinations) unselected while the run was executing. Rejected, discarded and superseded inputs are flagged. Losing `chosen` after the run started blocks neither the commit nor the `based_on` edge, writes no event, and never invalidates, discards or hides the outputs, which stay traceable to the exact input revision and to the request and run. This is the specific exception to AC-REL-054 for AI paths. It applies to every run that produces creative_path revisions. [R1, R8, R9] Whether a run still `pending` when `chosen` is lost counts as started: **[Default OI-25]**. | Input discarded or unselected during the run | Outputs stored. | WARN(target_inactive) for rejected or discarded inputs | APP+PROJ | I |
 | AC-GEN-021 | The user can cancel a pending or running run. A response arriving later is stored raw and creates no content. | none | Status `canceled`. | Cancel on a terminal run: REJECT(E_NO_OP) | APP | I |
 | AC-GEN-022 | A run left in `running` beyond its lease is set to `failed` with `error_code = interrupted`. **[Default OI-17]** | Lease expired | Status failed. | n/a | APP | I |
 | AC-GEN-023 | `rewrite` has exactly one anchor; its output is the next revision of the anchor's item, with `change_type = ai_rewrite` and source = anchor. | none | As stated. | Output for another item: DROP | APP | I |
 | AC-GEN-024 | `alternatives` produces new items of the anchor's type, with `change_type = initial`, and no relation to the anchor. Lineage is the RunInput `anchor`. | none | New items. | Different type: DROP | APP | I |
 | AC-GEN-025 | Outputs are validated against the policy active at commit time, and record that `policy_version`. **[Default OI-7]** | Policy changed during the run | Invalid elements under the new policy are dropped. | DROP | APP | I |
 | AC-GEN-026 | `instruction_version_id` references an immutable InstructionVersion. | none | none | Missing: REJECT(E_REFERENCE_NOT_FOUND) | DB | U |
-| AC-GEN-027 | A `rewrite` request whose anchor is a creative_path revision with a `based_on` edge is accepted only if that edge's exact combination revision holds `chosen` when the request, or any retry of it, is submitted (the output carries the same `based_on`). [R6, R8] | Anchor P r1 based_on K r1; K r1 not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN); no request or run is created | APP | I |
+| AC-GEN-027 | A `rewrite` request whose anchor is a creative_path revision with a `based_on` edge needs the combination to be chosen **only if** the request uses that combination revision directly as a RunInput. Otherwise the output is a content-only edit that carries the same target (AC-REL-056) and no `chosen` check applies, at request, retry or commit. [R9, R11] | Anchor P r1 based_on K r1; K r1 not chosen | Request without K as input: accepted; the output P r2 keeps based_on K r1. | Request with K r1 as a direct input: REJECT(E_COMBINATION_NOT_CHOSEN); no request or run is created | APP | I |
+| AC-GEN-028 | **No re-validation at commit.** Committing the outputs of a run that has started never reads the `chosen` state of its combination inputs. For any sequence of selection changes on those inputs after the run started, the committed outputs, their `based_on` edges and their provenance (`produced_by_run_id`, request, exact RunInputs) are identical. [R9] | Generated selection histories after run start | Identical commit outcome in every history. | n/a | APP | P |
 
 ---
 
@@ -541,13 +549,15 @@ Request kinds and their input and output tables are in §13 **[Default OI-10]**.
 
 Columns: **Whole command rejected?** / **Raw diagnostics retained?** / **Domain records committed?**
 
+Every row where the command is rejected also writes the command's idempotency record (AC-GLOBAL-029). That record is technical, not domain state, so it is not counted under "Domain records committed". A client that wants to retry a rejected command after fixing the cause (for example after E_STALE_JOB_VERSION or E_PROJECTION_UNAVAILABLE) must use a new `command_id`. [R10]
+
 | ID | Failure | Preconditions | Expected result | Rejected / Diagnostics / Records | Enf. | Level |
 |---|---|---|---|---|---|---|
 | AC-ERR-001 | Stale `expected_job_version` | job_version 40; command expects 39 | E_STALE_JOB_VERSION; the response includes 40. | Yes / error log only / **none** | APP | I |
 | AC-ERR-002 | Two commands from two tabs with the same `expected_job_version` | Both expect 40 | Exactly one is accepted; the other gets E_STALE_JOB_VERSION. | Loser: Yes / log / none | APP | I |
-| AC-ERR-003 | Duplicate `command_id`, identical payload (e.g. a retry after a network drop) | Command accepted earlier | The original response is returned. | No / n/a / **none new** | APP | I |
-| AC-ERR-004 | Duplicate `command_id`, different payload | none | E_COMMAND_ID_CONFLICT. | Yes / log / none | APP | I |
-| AC-ERR-005 | Partial transaction failure (any write in the command fails, including the projection update) | Fault injected after the first event insert | Full rollback; job_version and projection unchanged; the next accepted record takes the next sequence with no gap. | Yes / error log / **none** | DB | I |
+| AC-ERR-003 | Duplicate `command_id`, identical payload (e.g. a retry after a network drop) | Command accepted or rejected earlier | The original response is returned without re-executing the command. [R10] | No / n/a / **none new** | APP | I |
+| AC-ERR-004 | Duplicate `command_id`, different payload | Command accepted or rejected earlier | E_COMMAND_ID_CONFLICT; the stored idempotency record is unchanged. [R10] | Yes / log / none | APP | I |
+| AC-ERR-005 | Partial transaction failure (any write in the command fails, including the projection update) | Fault injected after the first event insert | Full rollback; job_version and projection unchanged; the next accepted record takes the next sequence with no gap. A technical failure is not a domain rejection: no idempotency record is kept, so the same `command_id` can be retried and will execute. **[Default OI-27]** | Yes / error log / **none** | DB | I |
 | AC-ERR-006 | Invalid cross-job reference | none | E_CROSS_JOB. | Yes / log / none | DB+APP | I |
 | AC-ERR-007 | Missing referenced revision (non-existent ID) | none | E_REFERENCE_NOT_FOUND. | Yes / log / none | DB | I |
 | AC-ERR-008 | Policy version mismatch: the command declares a `policy_version` different from the active one **[Default OI-7]** | Active P2; command declares P1 | E_POLICY_VERSION_MISMATCH; the response includes P2. | Yes / log / none | APP | I |
@@ -560,6 +570,9 @@ Columns: **Whole command rejected?** / **Raw diagnostics retained?** / **Domain 
 | AC-ERR-015 | Run output commit races a user command | User command expects 40; the run commits first (41) | The run commit succeeds; the user command gets E_STALE_JOB_VERSION. | User: Yes / log / none | APP | I |
 | AC-ERR-016 | Retry submitted twice with the same `command_id` | Attempt 1 failed | Exactly one attempt 2. | Second: No / n/a / none new | APP | I |
 | AC-ERR-017 | Unknown enum value in any field | none | E_INVALID_ENUM. | Yes / log / none | DB | U |
+| AC-ERR-018 | Replay of a rejected command, same `command_id`, same payload | C rejected with E_EVIDENCE_REQUIRED | The stored rejection is returned; no validation runs. [R10] | Yes (same rejection) / n/a / **none** | APP | I |
+| AC-ERR-019 | Reuse of a rejected command's `command_id` with a different payload (including the same content under another claim type) | C rejected | E_COMMAND_ID_CONFLICT. [R10] | Yes / log / none | APP | I |
+| AC-ERR-020 | Resubmission under a new `command_id` after a rejection | C rejected; C' has a new id and a corrected payload | C' is validated and executed independently of C; C's idempotency record is unchanged. [R10] | Depends on C' / n/a / C' records only | APP | I |
 
 ---
 
@@ -645,6 +658,15 @@ Then it is stored as `user` + `hypothesis`
 When the user writes a creative_path declared as `hypothesis`
 Then the command is refused with E_ASSERTION_NOT_ALLOWED
 
+**AC-CONTENT-110: Resubmitting under another claim type needs a new command_id** (I)
+Given command C (id c-1) saved an audience declared `extracted_fact` with no evidence, and was refused with E_EVIDENCE_REQUIRED
+When the client re-sends c-1 with the identical payload
+Then the same E_EVIDENCE_REQUIRED response is returned, the command is not re-executed, and nothing is written
+When the client sends c-1 with the same audience declared `hypothesis`
+Then the command is refused with E_COMMAND_ID_CONFLICT and nothing is written
+When the client sends a new id c-2 with the audience declared `hypothesis`
+Then it is accepted as `user` + `hypothesis`, and c-1's idempotency record still holds the original rejection
+
 ### Relations
 
 **AC-REL-101: Re-pinning an answer** (I)
@@ -680,10 +702,18 @@ Then it is accepted
 **AC-REL-106: Editing a path whose combination moved on** (I)
 Given path P r1 based_on K r1, and the user later edited K's label so `chosen` moved to K r2 (AC-DEC-024)
 When the user edits P's title
-Then the command is refused with E_COMBINATION_NOT_CHOSEN, because K r1 is no longer chosen (OI-24)
-And P r2 does not exist; P r1 and its `based_on` K r1 are unchanged
-When the user writes a new path item based_on K r2
-Then it is accepted
+Then P r2 is created with `based_on` K r1, although K r1 is no longer chosen [R11]
+And no DecisionEvent is written for K r1 or K r2: K r2 stays chosen, K r1 stays unchosen
+And if P r1 was a finalist, the selection moves to P r2 only through the explicit events of AC-DEC-024
+
+**AC-REL-107: Changing the combination of a path** [Default C-5] (U)
+Given path P r1 based_on K r1, combination K2 r1 is not chosen and K3 r1 is chosen
+When the user edits P with `based_on` → K2 r1
+Then the command is refused with E_REPIN_NOT_ALLOWED and nothing is written
+When the user edits P with `based_on` → K3 r1
+Then the command is also refused with E_REPIN_NOT_ALLOWED (a changed target is an identity change)
+When the user writes a new path item based_on K2 r1
+Then it is refused with E_COMBINATION_NOT_CHOSEN; based_on K3 r1 is accepted
 
 ### Combinations
 
@@ -926,9 +956,23 @@ Then the paths are committed with based_on K r1 and WARN(target_inactive)
 **AC-GEN-107: The combination loses chosen while the run executes** (I)
 Given path_generation request R with chosen K r1, and attempt 1 is `running`
 When the user writes unselected(K r1, chosen), and then the run completes with 5 valid paths
-Then the run is `completed`, and the 5 paths are stored with `based_on` K r1 and `produced_by_run_id` = attempt 1 [Default C-4]
+Then the run is `completed`, and the 5 paths are stored with `based_on` K r1 and `produced_by_run_id` = attempt 1, with no `chosen` check at commit [R9]
 And no DecisionEvent is written, and the paths are neither discarded nor hidden
 And each path traces to request R, attempt 1 and K r1
+
+**AC-GEN-108: A new request or retry from an unchosen revision after a successful run** (I)
+Given the state at the end of AC-GEN-107 (K r1 unchosen, 5 paths saved)
+When the user creates a new path_generation request with K r1
+Then it is refused with E_COMBINATION_NOT_CHOSEN and no request or run exists
+When the user retries request R
+Then it is refused with E_RETRY_NOT_ALLOWED (attempt 1 completed), and in any case no attempt 2 exists
+
+**AC-GEN-109: Rewriting a path whose combination is no longer chosen** (I)
+Given path P r1 based_on K r1, and K r1 is no longer chosen
+When the user requests a `rewrite` of P r1 without K r1 as a RunInput
+Then the request is accepted and the output P r2 (`ai_rewrite`) keeps `based_on` K r1
+When the user requests a rewrite that includes K r1 as a direct RunInput
+Then it is refused with E_COMBINATION_NOT_CHOSEN
 
 ### Presentations
 
@@ -982,6 +1026,20 @@ And select commands fail with E_PROJECTION_UNAVAILABLE
 When a full rebuild succeeds
 Then commands are accepted again and the projection equals the fold
 
+**AC-ERR-103: A rejected command stays rejected on replay** (I)
+Given command c-7 creating a manual path based_on K r1 was refused with E_COMBINATION_NOT_CHOSEN
+And the user then chose K r1
+When the client re-sends c-7 with the identical payload
+Then the original E_COMBINATION_NOT_CHOSEN response is returned and no path is created
+When the client sends the same payload under a new id c-8
+Then the path is created
+
+**AC-ERR-104: Idempotency records are not domain state** (P)
+Given a job history with accepted and rejected commands
+When all idempotency records are removed and the projection is rebuilt
+Then every domain record, the projection and the job history are identical to before
+And `job_version` counts only domain records, never rejections
+
 ---
 
 ## 13. Open issues
@@ -990,11 +1048,11 @@ Each item states the gap, its impact on testing, and the **recommended default**
 
 ### Contradictions
 
-**C-4: R6 at commit time versus R8 for runs already started.**
-1. **Contradiction.** R6 says every creative_path revision with `based_on` must reference a combination revision that holds `chosen`, validated in the transaction that creates the revision, "whether produced by AI or authored manually". For AI paths, that transaction is the run commit. R8 says that if the combination loses `chosen` after the run started, the run may complete and its outputs remain valid. Read literally, R6 would reject those outputs at commit.
-2. **Default (not approved).** R8 is the specific rule and governs run commits: for AI-produced revisions, the `chosen` check runs when the request and each retry are submitted (AC-COMB-024, AC-COMB-029, AC-GEN-027), not at commit. R6 applies in full to user commands.
-3. **Alternative.** Check again at commit and DROP outputs whose combination lost `chosen`. That contradicts R8's "outputs remain valid", so it needs R8 to be restated.
-4. **Testing impact.** AC-REL-044, AC-GEN-020, scenario AC-GEN-107.
+**C-5: R11 names a "changed `based_on` target", but the identity rule forbids it.**
+1. **Contradiction.** R11 requires `chosen` when "the relation target changes to another exact combination revision". The approved identity rule (D17; AC-CONTENT-027, AC-REL-043) makes the `based_on` target constant across all revisions of a path, so a target change inside one path item is refused before `chosen` matters. R11's case 2 cannot occur within one item.
+2. **Default (not approved).** Keep the identity rule: a changed target is refused with E_REPIN_NOT_ALLOWED whether or not the new target is chosen, and a path on another combination revision is a new item, checked by AC-REL-054.
+3. **Alternative.** Allow a path revision to re-pin `based_on` (for example to a newer revision of the same combination item) when the new target is chosen. This changes the path's structural identity and AC-CONTENT-027, AC-REL-043 and §3.2.
+4. **Testing impact.** AC-REL-043, AC-REL-058, scenario AC-REL-107.
 
 ### Resolved
 
@@ -1008,6 +1066,9 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | OI-21: user-written paths on unchosen combinations | R6 | AC-REL-043, 054 to 057; AC-GEN-027; scenarios AC-REL-105, 106 |
 | OI-22: relink and selections | R7 (the opposite of the former default: relink never moves a role) | AC-DEC-024, 047, 048; scenarios AC-DEC-113 to 115 |
 | Retry reading of AC-COMB-029 (confirmed) | R8 | AC-COMB-029; AC-REL-044, 057; AC-GEN-020, 027; scenarios AC-COMB-109, 111; AC-GEN-107 |
+| C-4: R6 at commit time versus runs already started | R9 | AC-REL-044; AC-GEN-020, 027, 028; scenarios AC-GEN-107 to 109 |
+| OI-23: `command_id` of rejected commands | R10 | §1.2, §1.3, §11 intro; AC-GLOBAL-010, 011, 029 to 031; AC-CONTENT-032, 033; AC-ERR-003, 004, 018 to 020; scenarios AC-CONTENT-110, AC-ERR-103, 104 |
+| OI-24: editing a path whose combination is no longer chosen | R11 | AC-REL-043, 054, 056 to 058; AC-GEN-027; scenarios AC-REL-106, 107, AC-GEN-109 |
 
 ### Gaps
 
@@ -1031,8 +1092,9 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | OI-18 | A new SourceVersion with text identical to the latest. | none yet | Refused with E_NO_CHANGE. |
 | OI-19 | D19 allows drift as a projection or a separate entity. | AC-EVID-014, 018 | Projection; the tests assert only observable reads, so either implementation passes. |
 | OI-20 | `job_sequence` on GenerationRun and PresentationVersion is not stated in the matrix. | AC-GLOBAL-012 | Assign it to both. |
-| OI-23 | R4 and R5 require the alternative to be submitted "through a new command". It is not stated whether that command must use a new `command_id`, given that a rejected command stores nothing (so its `command_id` is not reserved). | AC-CONTENT-033, 035, AC-GLOBAL-010, 011 | Rejected commands do not reserve their `command_id`. The alternative is any separate submission that declares the chosen assertion explicitly; the server never generates it. |
-| OI-24 | Applied literally, R6 blocks every edit of a path whose `based_on` combination revision is no longer chosen, including when `chosen` merely moved to a newer revision of the same combination through an edit (AC-DEC-024). Because `based_on` cannot be re-pinned (identity rule), the user must create a new path item even to fix a typo in a finalist. | AC-REL-056, scenario AC-REL-106 | The literal rule is applied (approved text). Confirm it is intended. The alternative exempts carried-forward `based_on` edges from the check and applies it only when the edge is first created. |
+| OI-25 | R9 protects runs that have "started successfully". It does not say whether a run still `pending` (created, not yet running) is protected if its combination loses `chosen` before it starts. | AC-GEN-020, 028 | Treat `pending` like started: `chosen` is checked only at request creation and retry, never when a pending run starts or commits. |
+| OI-26 | R10 requires idempotency records for rejected commands but does not fix their scope, content or retention. | AC-GLOBAL-010, 011, 029 to 031, AC-GLOBAL-025 | Scope per user account; store a payload fingerprint (not the payload) and the returned outcome; keep them for the life of the job and erase them with the job. |
+| OI-27 | Whether a technical failure (storage fault, crash, rollback) counts as a "rejected command" under R10. If it did, its `command_id` could never be retried. | AC-ERR-005 | No: only domain-rule rejections are recorded. A technical failure leaves no idempotency record, so the same `command_id` may be retried and will execute. |
 
 ### Default request-kind table (OI-10)
 
@@ -1058,7 +1120,7 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | D2 | ≥1 brand-side component | AC-COMB-002, 009, 103 |
 | D3 | Mechanism 0 or 1 | AC-COMB-003 to 005, 102 |
 | D4 | ≤5 components | AC-COMB-006, 007, 101 |
-| D5 | AI proposes combinations; only the user selects | AC-COMB-021 to 024, 027 to 029, 105, 107 to 111 (R1, R8); AC-REL-054 to 057 (R6) |
+| D5 | AI proposes combinations; only the user selects | AC-COMB-021 to 024, 027 to 029, 105, 107 to 111 (R1, R8); AC-REL-054 to 058 (R6, R11); AC-GEN-020, 027, 028 (R9) |
 | D6 | Secondary requires primary | AC-DEC-015, 016, 042 to 046, 101, 104, 105, 110 to 112 (R3) |
 | D7 | No finalist cap; UI recommends 3 | AC-DEC-018, 019, 109 |
 | D8 | Explicit role changes; no auto-demotion | AC-DEC-013, 014, 017, 102, 103 |
@@ -1082,7 +1144,7 @@ Each item states the gap, its impact on testing, and the **recommended default**
 
 ---
 
-## Appendix B: Decisions from revisions 2 and 3
+## Appendix B: Decisions from revisions 2 to 4
 
 | ID | Decision | Resolves |
 |---|---|---|
@@ -1091,6 +1153,9 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | R3 | Validate the final state of the whole command. The final state never holds a secondary audience or tension without an active, non-discarded primary of the same type. A command may emit several explicit events; no automatic role change. A discarded primary never supports secondaries. | OI-3 |
 | R4 | A human command saving an `extracted_fact` without validated evidence in the same transaction is rejected. The system may offer alternatives explicitly but never reclassifies silently. A rejected command creates no revision, link, event or partial state. | OI-16 (introduces C-3) |
 | R5 | Users may author `hypothesis` on all eight descriptive types, with no evidence required (optional links must validate). The matrix becomes 57 allowed and 71 forbidden. After a rejected user fact, the system may offer `hypothesis` or `human_text`; the user must choose explicitly and submit a new command. Silent reclassification stays forbidden. | C-3 |
-| R6 | Every creative_path revision with `based_on` must reference an exact combination revision that holds `chosen`, for AI and user paths alike, validated in the transaction that creates the revision and relation. Paths without a combination stay valid. A rejected command leaves no partial revision or relation. | OI-21 (introduces C-4 and OI-24) |
+| R6 | Every creative_path revision with `based_on` must reference an exact combination revision that holds `chosen`, for AI and user paths alike, validated in the transaction that creates the revision and relation. Paths without a combination stay valid. A rejected command leaves no partial revision or relation. | OI-21 (its C-4 and OI-24 are resolved by R9 and R11) |
 | R7 | A `relink` revision never inherits or receives a role implicitly. Transferring a role requires explicit events in the same transaction, whose final state must satisfy every selection invariant. | OI-22 |
 | R8 | Every retry of path generation re-checks that the exact combination revision holds `chosen`; otherwise the retry is rejected with no run and no partial state. `chosen` on a newer revision does not count. If `chosen` is lost after a run started, the run may complete and its outputs stay valid and traceable. | Confirms AC-COMB-029 |
+| R9 | For AI paths, the exact combination revision must be chosen when the request is created and when each retry is requested. Once a run has started, losing `chosen` never prevents its results from being saved; they stay valid and traceable, and `chosen` is not re-validated at commit. This is the specific exception to R6 for AI paths. | C-4 (introduces OI-25) |
+| R10 | A rejected command creates or modifies no domain state, but its `command_id` is recorded with the rejection for idempotency. Same id and payload returns the same rejection without re-executing; same id with another payload is an idempotency conflict. Resubmitting under another claim type needs a new `command_id`. | OI-23 (introduces OI-26, OI-27) |
+| R11 | A path edit that keeps exactly the same `based_on` target does not need the combination to be chosen, and infers no role. `chosen` is required when `based_on` is created for the first time, when the target changes, and when a new request or a retry uses the combination directly. | OI-24 (introduces C-5) |
