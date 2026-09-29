@@ -2,7 +2,9 @@
 
 Primary reference: `docs/data-model/content-relation-matrix-v1.3.md` (approved), as amended by the 25 confirmed v1.4 decisions (listed in Appendix A, referenced as **D1** to **D25**).
 
-This package is self-contained: every rule needed to derive a test is stated here. Where the approved material does not settle a rule, the criterion is marked **[Default OI-n]** and the gap is described in §13. Defaults are recommendations, not approved policy. Tests built on them must be tagged so they can be changed when the product owner decides.
+This package is self-contained: every rule needed to derive a test is stated here. Where the approved material does not settle a rule, the criterion is marked **[Default OI-n]** or **[Default C-n]** and the gap is described in §13. Defaults are recommendations, not approved policy. Tests built on them must be tagged so they can be changed when the product owner decides.
+
+**Revision 2.** Four further product decisions, **R1** to **R4** (Appendix B), resolve former issues C-1, C-2, OI-3 and OI-16. Criteria that depend only on those decisions no longer carry a default marker.
 
 ---
 
@@ -164,9 +166,9 @@ A user `extracted_fact` requires a validated EvidenceLink created by the same co
 |---|---|---|---|---|---|---|---|
 | business_problem | none | none | supports | chosen, max 1 per job | yes | yes | yes |
 | communication_problem | none | none | supports | chosen, max 1 per job | yes | yes | yes |
-| audience | none | none | supports | primary, max 1 per job; secondary, N (requires primary) | yes | yes | yes |
+| audience | none | none | supports | primary, max 1 per job; secondary, N (the final state of every command must have an active, non-discarded primary audience whenever a secondary exists; R3) | yes | yes | yes |
 | human_truth | none | grounded_in, combines | supports | chosen, N | yes | yes | yes |
-| human_tension | grounded_in (0..5) | combines | supports | primary, max 1 per job; secondary, N (requires primary) | yes | yes | yes |
+| human_tension | grounded_in (0..5) | combines | supports | primary, max 1 per job; secondary, N (same final-state rule, per type; R3) | yes | yes | yes |
 | central_message | none | none | supports | chosen, max 1 per job | yes | yes | yes |
 | restriction | none | none | supports | chosen, N | yes | **no** | yes |
 | open_question | none | answers | supports | chosen, N | yes | **no** | yes |
@@ -174,7 +176,7 @@ A user `extracted_fact` requires a validated EvidenceLink created by the same co
 | brand_element | none | combines | supports | **none** | yes | yes | yes |
 | category_element | none | combines | supports | **none** | yes | yes | yes |
 | creative_mechanism | none | combines | supports | **none** | yes | yes | yes |
-| combination | combines (2..5, composition rule) | based_on | none | chosen, N **[Default C-1]** | yes | yes | yes |
+| combination | combines (2..5, composition rule) | based_on | none | chosen, N, no cap; assigned and removed by the user only; a revision must currently be chosen to be a path_generation input (R1) | yes | yes | yes |
 | creative_path | based_on (0..1) | evaluates | presents | finalist, N, no cap [D7] | yes | yes | yes |
 | memory_test | evaluates (exactly 1) | none | evaluation | chosen, max 1 per evaluated path revision | yes | **no** | yes |
 | pr_headline | evaluates (exactly 1) | none | evaluation | chosen, max 1 per evaluated path revision | yes | yes | yes |
@@ -198,18 +200,20 @@ The full space is 16 types × 2 authorships × 4 assertions = **128 triples**. E
 
 The other **79** are forbidden. Tests should enumerate all 128.
 
+**[Default C-3]:** these counts assume a user may not author a `hypothesis`. If C-3 is resolved by allowing user hypotheses on descriptive types, the counts become 57 allowed and 71 forbidden, and AC-CONTENT-001, 008 and 033 change accordingly.
+
 ### 4.2 Criteria
 
 | ID | Rule | Preconditions | Expected result | Failure result | Enf. | Level |
 |---|---|---|---|---|---|---|
-| AC-CONTENT-001 | Exactly the 49 allowed triples of §3.1 are accepted; all 79 others fail. | Enumerate all 128 triples, with valid payload and evidence where required | 49 accepted; 79 fail with the outcome given by 002 to 016. | as below | APP (+DB for 012) | P |
+| AC-CONTENT-001 | Exactly the 49 allowed triples of §3.1 are accepted; all 79 others fail. **[Default C-3]** for the counts. | Enumerate all 128 triples, with valid payload and evidence where required | 49 accepted; 79 fail with the outcome given by 002 to 016. | as below | APP (+DB for 012) | P |
 | AC-CONTENT-002 | A descriptive `ai` + `extracted_fact` is accepted only with ≥1 validated EvidenceLink committed in the same transaction. [D25] | AI output with a valid quote | Revision stored as `extracted_fact` with ≥1 link. | Invalid or missing quote: DOWNGRADE to `hypothesis` | APP+DB | I |
 | AC-CONTENT-003 | A descriptive `ai` + `hypothesis` is accepted with 0..N validated links. | AI output | Stored as `hypothesis`. | An invalid link is dropped; the item is kept (AC-EVID-008) | APP | U |
 | AC-CONTENT-004 | A descriptive `ai` + `suggestion` is not allowed. | AI output | none | DROP | APP | U |
 | AC-CONTENT-005 | `ai` + `human_text` is never allowed, for any type. | AI output | none | DROP (DB check rejects any bypass) | DB+APP | U |
 | AC-CONTENT-006 | A descriptive `user` + `human_text` is accepted without evidence. | User command | Stored. | Command includes evidence: REJECT(E_EVIDENCE_FORBIDDEN) | APP | U |
-| AC-CONTENT-007 | A descriptive `user` + `extracted_fact` is accepted only with a validated EvidenceLink in the same command. **[Default OI-16]**: a user command is refused, not downgraded. | User highlights brief text | Stored as `extracted_fact` with its link. | Missing link: REJECT(E_EVIDENCE_REQUIRED); invalid link: REJECT(E_EVIDENCE_INVALID) | APP | I |
-| AC-CONTENT-008 | `user` + `hypothesis` and `user` + `suggestion` are never allowed. | User command | none | REJECT(E_ASSERTION_NOT_ALLOWED) | DB+APP | U |
+| AC-CONTENT-007 | A `user` + `extracted_fact` (descriptive types and central_message) is accepted only with a validated EvidenceLink in the same command. Otherwise the whole command is rejected: it is never downgraded or reclassified (AC-CONTENT-031 to 033). [R4] | User highlights brief text | Stored as `extracted_fact` with its link. | Missing link: REJECT(E_EVIDENCE_REQUIRED); invalid link: REJECT(E_EVIDENCE_INVALID); no revision, link, event or projection change | APP | I |
+| AC-CONTENT-008 | `user` + `hypothesis` and `user` + `suggestion` are never allowed. **[Default C-3]** for `hypothesis`. | User command | none | REJECT(E_ASSERTION_NOT_ALLOWED) | DB+APP | U |
 | AC-CONTENT-009 | central_message: `ai` + `extracted_fact` requires evidence; `ai` + `suggestion` forbids it; `ai` + `hypothesis` is not allowed. | AI output | Fact and suggestion accepted as specified. | Hypothesis: DROP; fact without valid evidence: DOWNGRADE to `suggestion`; suggestion with evidence: link dropped, item kept | APP | U |
 | AC-CONTENT-010 | open_question: `ai` + `suggestion` is accepted with 0..N validated links; `ai` + `extracted_fact` and `ai` + `hypothesis` are not allowed. | AI output | Suggestion accepted. | Fact: DOWNGRADE to `suggestion`; hypothesis: DROP | APP | U |
 | AC-CONTENT-011 | open_question: `user` + `human_text` is accepted without evidence; `user` + `extracted_fact` is not allowed. | User command | Stored. | Fact: REJECT(E_ASSERTION_NOT_ALLOWED); evidence: REJECT(E_EVIDENCE_FORBIDDEN) | APP | U |
@@ -229,9 +233,12 @@ The other **79** are forbidden. Tests should enumerate all 128.
 | AC-CONTENT-025 | Revisions stay readable at their original `schema_version` after a newer schema is introduced, and are never migrated in place. | r1 at schema 1; schema 2 becomes current | Reading r1 returns its schema 1 payload; its hash is unchanged. | n/a | APP | I |
 | AC-CONTENT-026 | Identity is decided by the command, never inferred: *Edit* always creates a revision of the same item, *New / Alternative* always a new item. | none | The item ID is observed per command. | n/a | APP | I |
 | AC-CONTENT-027 | Structural identity keys are constant across all revisions of an item: combination member item set, human_note `answers` target item, creative_path `based_on` target revision, memory_test and pr_headline `evaluates` target revision. [D17] | Any revision sequence | For every item, the key computed on each revision is equal. | A command that would change the key: REJECT(E_IDENTITY_CHANGE) | APP | P |
-| AC-CONTENT-028 | Editing an `extracted_fact` produces `human_text` (user) unless validated evidence is attached in the same command. An `ai_rewrite` of a fact is a fact only with newly validated evidence. EvidenceLinks are never copied automatically. | A fact revision r1 | The new revision's assertion and links follow the rule; r1's links are unchanged. | AI without evidence: DOWNGRADE | APP | I |
+| AC-CONTENT-028 | A `user_edit` of an `extracted_fact` must declare its `assertion_type`. Declaring `human_text` is accepted without evidence. Declaring `extracted_fact` is accepted only with evidence validated in the same command. The system never derives the new assertion from the source revision. An `ai_rewrite` of a fact is a fact only with newly validated evidence. EvidenceLinks are never copied automatically. [R4] | A fact revision r1 | The new revision's assertion is exactly the declared one; r1's links are unchanged. | User declares fact without valid evidence: REJECT(E_EVIDENCE_REQUIRED / E_EVIDENCE_INVALID); no declared assertion: REJECT(E_SCHEMA); AI without evidence: DOWNGRADE | APP | I |
 | AC-CONTENT-029 | `user_edit`, `relink` and `ai_rewrite` on a discarded item are refused. **[Default OI-4]** | Item discarded | none | REJECT(E_ITEM_DISCARDED) | APP | I |
 | AC-CONTENT-030 | Every AI-produced revision has `authorship = ai`, `produced_by_run_id` set, and `change_type` of `initial` (new item) or `ai_rewrite`. | Run commit | Fields as stated. | n/a | DB+APP | I |
+| AC-CONTENT-031 | **No silent reclassification of human content.** Every user command that creates a revision declares `assertion_type`, and the stored value always equals the declared one. The system never replaces a user's declared `extracted_fact` with `hypothesis`, `human_text` or any other value. [R4] | Generated user commands | For every accepted command, stored assertion = declared assertion. | Any other outcome is a defect | APP | P |
+| AC-CONTENT-032 | **No partial writes after a rejected fact.** A rejected user fact command creates no ContentItem, ContentRevision, EvidenceLink, ContentRelation or DecisionEvent, and leaves `job_version` and the projection unchanged. This holds even when the command also carried selection-move events or relations. [R4] | Edit of a selected fact declaring `extracted_fact` with an invalid quote | Record counts, `job_version` and projection are identical before and after. | n/a | APP | P |
+| AC-CONTENT-033 | The rejection response for E_EVIDENCE_REQUIRED or E_EVIDENCE_INVALID lists the alternative assertion types the user may resubmit with. Accepting one requires a **new** command with the chosen assertion declared explicitly. The system never resubmits on the user's behalf. [R4] The list contains `human_text`; `hypothesis` is listed only if C-3 allows user hypotheses. **[Default C-3]** | Rejected fact command | The response contains the list; zero records are written until a new command arrives. | n/a | APP | I |
 
 ### 4.3 Weaker assertion map (for DOWNGRADE)
 
@@ -294,11 +301,12 @@ Incoming cardinality is 0..N for every relation. The source is always the depend
 | AC-REL-041 | **based_on**: for an AI path from a `path_generation` request with a combination input, the command writes `based_on` to exactly that input revision. Any combination reference in the AI output is ignored. | Request with combination C r2 | Every path from the run has `based_on` = C r2. | n/a | APP | I |
 | AC-REL-042 | **based_on**: an AI path from a request with no combination input has no `based_on`. | none | Zero edges. | n/a | APP | U |
 | AC-REL-043 | **based_on**: no re-pin. A new path revision keeps the same target, and `relink` is not valid for creative_path. | Path r1 based_on C r1; C r2 exists | Edit gives path r2 with based_on C r1. | Changing the target: REJECT(E_REPIN_NOT_ALLOWED) | APP | U |
-| AC-REL-044 | **based_on**: the target combination has an active `chosen` selection when the edge is first created. **[Default C-1]** | Combination not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN) | APP | I |
+| AC-REL-044 | **based_on** (AI paths): the target is always the request's combination input, and that exact revision was `chosen` when the request was created (AC-COMB-024). The edge is written at commit even if the combination lost `chosen` during the run (AC-GEN-020). [R1] | Request with chosen K r2 | Every AI path has based_on = K r2. | Unchosen at request creation: the request is refused (AC-COMB-024) | APP | I |
 | AC-REL-050 | **evaluates**: every memory_test and pr_headline revision has exactly one edge, to a creative_path revision. | none | Accepted. | 0 or 2: REJECT(E_CARDINALITY) | APP | U |
 | AC-REL-051 | **evaluates**: for AI tests from `path_evaluation`, the command writes the edge to the request's single `subject` revision. | Subject path P r2 | Every test from the run evaluates P r2. | n/a | APP | I |
 | AC-REL-052 | **evaluates**: no re-pin. Testing a newer path revision requires a new test item. | Test on P r1; P r2 exists | Edit gives test r2 still evaluating P r1. | Changing the target: REJECT(E_REPIN_NOT_ALLOWED) | APP | U |
 | AC-REL-053 | **evaluates**: a new test may not target a rejected path revision or a discarded path. | none | none | REJECT(E_TARGET_INACTIVE) | APP | U |
+| AC-REL-054 | **based_on** (user-written paths): a new `based_on` edge created by a user command targets a combination revision that currently holds `chosen`. **[Default OI-21]** | Combination revision not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN) | APP | I |
 
 ---
 
@@ -330,10 +338,13 @@ Terms used here: **human side** = human_truth or human_tension; **brand side** =
 | AC-COMB-020 | When a component item gets a newer revision, the combination is unchanged and flagged. | T r2 created | K still pins T r1. | WARN(target_superseded) | PROJ | I |
 | AC-COMB-021 | An AI-proposed combination has `authorship = ai`, `assertion = suggestion` and `produced_by_run_id` set; each component is an exact RunInput revision of its request. [D5] | combination_suggestion run | Accepted. | A component not in the inputs, or a newer revision than the input: DROP of the combination | APP | I |
 | AC-COMB-022 | AI-proposed combinations are never selected by the system. The run commit writes zero DecisionEvents, even if the output says "select". [D5] | Run output | Zero events. | n/a | APP | I |
-| AC-COMB-023 | Only the user may select a combination, with role `chosen`. **[Default C-1]** | User command | DecisionEvent with `actor_user_id` = owner. | Any other actor: REJECT(E_FORBIDDEN) | APP | I |
-| AC-COMB-024 | A combination used as a `path_generation` input must have an active `chosen` selection when the request is created. **[Default C-1]** | Combination not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN) | APP | I |
+| AC-COMB-023 | Only the user may assign `chosen` to a combination revision, and there is no cap on the number of chosen combinations. [R1] | User command | DecisionEvent `selected(K rN, chosen)` with `actor_user_id` = owner; a 10th chosen combination is accepted. | Any other actor: REJECT(E_FORBIDDEN) | APP | I |
+| AC-COMB-024 | The exact combination revision used as a `path_generation` input must hold an active `chosen` selection when the request is created. [R1] | K r1 not chosen | none | REJECT(E_COMBINATION_NOT_CHOSEN) | APP | I |
 | AC-COMB-025 | Combination revisions carry no EvidenceLinks. | none | none | REJECT(E_EVIDENCE_FORBIDDEN) / AI: link dropped | APP | U |
 | AC-COMB-026 | A payload with no fields is valid; `label` and `rationale` are optional strings. | none | `{}` accepted. | n/a | APP | U |
+| AC-COMB-027 | Only the user may remove `chosen` from a combination. A run commit never writes `unselected`, whatever the AI output contains. [R1] | K r1 chosen; AI output says "drop K" | K r1 stays chosen; zero events from the run. | n/a | APP | I |
+| AC-COMB-028 | `chosen` is revision-exact. When K r1 is chosen and K r2 exists but is not chosen, only K r1 may be used as a path_generation input. [R1] | K r1 chosen, K r2 not chosen | A request with K r1 is accepted. | Request with K r2: REJECT(E_COMBINATION_NOT_CHOSEN) | APP | I |
+| AC-COMB-029 | A retry of a path_generation request is accepted only if its combination input revision still holds `chosen` when the retry is submitted. A retry is a new use of the input. [R1] | Attempt 1 failed; the user then unselected K r1 | none | REJECT(E_COMBINATION_NOT_CHOSEN); the request and attempt 1 are unchanged | APP | I |
 
 ---
 
@@ -356,11 +367,11 @@ Terms used here: **human side** = human_truth or human_tension; **brand side** =
 |---|---|---|---|---|---|---|
 | AC-DEC-010 | An item holds at most one active selection (one revision, one role). | Item selected | none | A second selection on any revision or role: REJECT(E_ITEM_ALREADY_SELECTED) | DB (projection index) + APP | I |
 | AC-DEC-011 | **chosen, capped:** business_problem, communication_problem and central_message allow at most one active `chosen` per job. Selecting while another item holds it requires an explicit `unselected` of the holder earlier in the same command. | Holder A active | [unselected(A), selected(B)] is accepted. | selected(B) alone: REJECT(E_SLOT_OCCUPIED) | DB (projection index) + APP | I |
-| AC-DEC-012 | **chosen, uncapped:** human_truth, restriction, open_question and combination (**[Default C-1]**) allow any number of `chosen`. | none | 3 chosen accepted. | n/a | APP | U |
+| AC-DEC-012 | **chosen, uncapped:** human_truth, restriction, open_question and combination [R1] allow any number of `chosen`. | none | 3 chosen accepted. | n/a | APP | U |
 | AC-DEC-013 | **primary:** audience and human_tension allow at most one active `primary` per job per type. [D4] | Primary A active | [unselected(A, primary), selected(B, primary)] is accepted. | selected(B, primary) alone: REJECT(E_SLOT_OCCUPIED) | DB (projection index) + APP | I |
 | AC-DEC-014 | **No automatic demotion:** after a new primary is selected, the previous primary holds no selection unless the same command explicitly wrote `selected(A, secondary)`. [D8] | As 013 | A holds no selection. | n/a | APP+PROJ | I |
-| AC-DEC-015 | **secondary requires primary:** `selected(X, secondary)` requires an active `primary` of the same type at the end of the command, on a non-discarded item. [D6] **[Default OI-3]** for the discarded part. | No primary audience | none | REJECT(E_PRIMARY_REQUIRED) | APP | I |
-| AC-DEC-016 | **Removing the primary:** a command whose end state has active secondaries but no active primary of that type is refused. **[Default OI-3]** | Primary A with secondary B | [unselected(A)] alone fails; [unselected(B, secondary), unselected(A, primary)] succeeds. | REJECT(E_PRIMARY_REQUIRED) | APP | I |
+| AC-DEC-015 | **Final-state invariant for secondaries.** After every accepted command, for each of audience and human_tension separately: if any active `secondary` exists, exactly one active `primary` of the same type exists on a **non-discarded** item. The check runs once, on the final state of the whole command; intermediate states between its events are not checked. It applies to every command that writes decision events (select, unselect, reject, discard, edit with selection move). [D6, R3] | No primary audience | none | selected(X, secondary) alone: REJECT(E_PRIMARY_REQUIRED) | APP | P |
+| AC-DEC-016 | **Removing the primary:** a command whose final state keeps active secondaries of a type but no active primary of that type is refused. [R3] | Primary A with secondary B | [unselected(A, primary)] alone fails. [unselected(B, secondary), unselected(A, primary)] succeeds. [unselected(A, primary), unselected(B, secondary), selected(B, primary)] succeeds. | REJECT(E_PRIMARY_REQUIRED) | APP | I |
 | AC-DEC-017 | **Role change on one item** is written explicitly as unselected(old role) + selected(new role) in the same command. [D8] | B is secondary | Promoting B writes both events. | selected(B, primary) without unselected(B, secondary): REJECT(E_ITEM_ALREADY_SELECTED) | APP | U |
 | AC-DEC-018 | **finalist:** only creative_path; any number per job, with no cap. [D7] | 3 finalists | A 4th finalist is accepted. | Non-path: REJECT(E_ROLE_NOT_ALLOWED) | APP | U |
 | AC-DEC-019 | The "recommend up to three finalists" guidance is UI only and never causes a rejection. [D7] | 10 finalists | Accepted. | n/a | POL | E |
@@ -390,7 +401,12 @@ Terms used here: **human side** = human_truth or human_tension; **brand side** =
 | AC-DEC-039 | On a discarded item, only these are allowed: restored, unselected, unfavorited, rejected, unrejected. selected, favorited and discarded are refused. | Item discarded | none | REJECT(E_ITEM_DISCARDED) | APP | P |
 | AC-DEC-040 | Restoring a non-discarded item is refused. | none | none | REJECT(E_NO_OP) | APP | U |
 | AC-DEC-041 | Restore returns the item to exactly its state before the discard. | Any state S, then discard, then restore | The projection equals S (except the last-event fields). | n/a | PROJ | P |
-| AC-DEC-042 | A selected but discarded item still counts toward role caps until it is explicitly unselected. It is excluded from effective selection and flagged. | Primary A discarded | A new primary needs unselected(A) first. | WARN(selected_but_discarded) | APP+PROJ | I |
+| AC-DEC-042 | A selected but discarded item still counts toward role caps until it is explicitly unselected. It is excluded from effective selection and flagged. A discarded primary never supports a secondary, even though its `selected` event stays in history (AC-DEC-015, 043). [R3] | Primary A discarded, no secondaries | A new primary needs unselected(A) first; selected(B, secondary) is refused. | WARN(selected_but_discarded); secondary: REJECT(E_PRIMARY_REQUIRED) | APP+PROJ | I |
+| AC-DEC-043 | **Discarding a primary under secondaries.** Discarding an item that holds the active primary of a type with active secondaries is accepted only if the same command explicitly brings the final state back into AC-DEC-015: either it unselects every secondary of that type, or it unselects the discarded primary and selects another non-discarded primary. [R3, D21] | Primary A, secondary B | [discarded(A), unselected(B, secondary)] accepted: A stays primary but discarded, B unselected. [discarded(A), unselected(A, primary), unselected(B, secondary), selected(B, primary)] accepted. | [discarded(A)] alone: REJECT(E_PRIMARY_REQUIRED) | APP | I |
+| AC-DEC-044 | **Rejecting a primary under secondaries.** Rejecting the primary revision (which requires unselecting it, AC-DEC-031) is accepted only if the same command restores AC-DEC-015 with explicit events. [R3] | Primary A r1, secondary B | [unselected(A r1, primary), rejected(A r1), unselected(B, secondary), selected(B, primary)] accepted. | [unselected(A r1, primary), rejected(A r1)] alone: REJECT(E_PRIMARY_REQUIRED) | APP | I |
+| AC-DEC-045 | **Every role change is an explicit event.** For any accepted command, the difference between the selection projection before and after equals exactly the set of selected and unselected events the command wrote. No role is added, removed or changed implicitly (no automatic demotion, promotion or clean-up). [D8, R3] | Generated commands | Projection diff = the command's explicit events. | Any implicit change is a defect | APP+PROJ | P |
+| AC-DEC-046 | **Rejected decision commands leave nothing behind.** When a command is refused by any decision rule (including AC-DEC-015), none of its events are stored, even the ones that were individually valid, and `job_version` and the projection are unchanged. [R3] | A 4-event command whose final state is invalid | Zero of the 4 events exist afterwards. | REJECT(code) | APP | P |
+| AC-DEC-047 | A `relink` whose source is the actively selected revision moves the selection like a `user_edit` (AC-DEC-024): the new revision, `unselected(old, role)` and `selected(new, same role)` in one command. Applies to human_tension and combination. **[Default OI-22]** | Combination K r1 chosen; relink to K r2 | K r2 chosen; K r1 not. | n/a | APP | I |
 
 ### 7.4 Presentation decisions
 
@@ -423,7 +439,7 @@ Terms used here: **human side** = human_truth or human_tension; **brand side** =
 | AC-EVID-004 | An `extracted_fact` revision has ≥1 valid link committed in the same transaction, checked at commit. [D25] | none | Accepted. | Commit without a link fails (DB deferred check); see 005 and 007 for handling | DB | I |
 | AC-EVID-005 | An AI fact whose quote cannot be located exactly in its cited version is DOWNGRADED. The failed link is not stored. | AI output with a fabricated quote | Stored as hypothesis or suggestion (§4.3) with WARN(claimed_fact_unverified). | n/a | APP | I |
 | AC-EVID-006 | An AI fact citing a SourceVersion that is not a RunInput of its request is DOWNGRADED. | Request input v2; output cites v1 | DOWNGRADE. | n/a | APP | I |
-| AC-EVID-007 | A user fact with an invalid or missing link is refused, not downgraded. **[Default OI-16]** | none | none | REJECT(E_EVIDENCE_INVALID / E_EVIDENCE_REQUIRED) | APP | U |
+| AC-EVID-007 | A user fact with an invalid or missing link is refused, never downgraded or reclassified. Nothing from the command is stored, including any links in it that were individually valid (AC-CONTENT-032). [R4] | none | none | REJECT(E_EVIDENCE_INVALID / E_EVIDENCE_REQUIRED) | APP | U |
 | AC-EVID-008 | A hypothesis may carry 0..N links; each must satisfy AC-EVID-001. An invalid AI link is dropped and the hypothesis is kept. | none | Valid links stored. | Invalid link: not stored; reported | APP | U |
 | AC-EVID-009 | Links on suggestion (except open_question) and on human_text are forbidden. | none | none | User: REJECT(E_EVIDENCE_FORBIDDEN); AI: link not stored | APP | U |
 | AC-EVID-010 | When the AI quote occurs several times in the version, the stored offsets are those of the first occurrence. | Quote occurs at 10 and 80 | start = 10. | n/a | APP | U |
@@ -466,7 +482,7 @@ Request kinds and their input and output tables are in §13 **[Default OI-10]**.
 | AC-GEN-017 | Every AI revision records `produced_by_run_id` (this run), `authorship = ai`, and the active `policy_version`. | none | Fields set. | n/a | DB | U |
 | AC-GEN-018 | Implied relations (`based_on`, `evaluates`) are written by the commit command from the request structure. | none | See AC-REL-041 and AC-REL-051. | n/a | APP | I |
 | AC-GEN-019 | The AI cannot create decisions: a run commit writes zero DecisionEvents whatever the output contains. | Output includes "select this" | Zero events. | n/a | APP | I |
-| AC-GEN-020 | Run outputs are committed even if their inputs were rejected, discarded or superseded while the run was executing. The outputs are flagged. | Input discarded during the run | Outputs stored. | WARN(target_inactive) | APP+PROJ | I |
+| AC-GEN-020 | Run outputs are committed even if their inputs were rejected, discarded, superseded or (for combinations) unselected while the run was executing. Rejected, discarded and superseded inputs are flagged. Losing `chosen` during the run blocks neither the commit nor the `based_on` edge, and writes no event. [R1] | Input discarded or unselected during the run | Outputs stored. | WARN(target_inactive) for rejected or discarded inputs | APP+PROJ | I |
 | AC-GEN-021 | The user can cancel a pending or running run. A response arriving later is stored raw and creates no content. | none | Status `canceled`. | Cancel on a terminal run: REJECT(E_NO_OP) | APP | I |
 | AC-GEN-022 | A run left in `running` beyond its lease is set to `failed` with `error_code = interrupted`. **[Default OI-17]** | Lease expired | Status failed. | n/a | APP | I |
 | AC-GEN-023 | `rewrite` has exactly one anchor; its output is the next revision of the anchor's item, with `change_type = ai_rewrite` and source = anchor. | none | As stated. | Output for another item: DROP | APP | I |
@@ -484,7 +500,7 @@ Request kinds and their input and output tables are in §13 **[Default OI-10]**.
 | AC-PRES-002 | `version_number` is unique and contiguous from 1 per presentation; versions are immutable. [D22] | none | 1..n | Update fails | DB | P |
 | AC-PRES-003 | A version has ≥1 block **[Default OI-14]**; block `position` is unique and contiguous from 1; reads return blocks in ascending position. | none | Stable order on every read. | REJECT(E_POSITION / E_EMPTY_VERSION) | DB+APP | U |
 | AC-PRES-004 | Block structure is free: no required block kinds and no required count beyond 1. `text` is non-empty after trimming. **[Default OI-14]** | none | Any sequence of text blocks is accepted. | Empty text: REJECT(E_SCHEMA) | APP | U |
-| AC-PRES-005 | Each block records `authorship` and `produced_by_run_id` at **block** level (AC-GLOBAL-019). **[Default C-2]** | none | Fields per block. | n/a | DB | U |
+| AC-PRES-005 | Provenance is recorded per **block**: each block records `authorship` (ai or user) and an optional `produced_by_run_id`, set if and only if `authorship = ai` (AC-GLOBAL-019). A version-level run field, if one exists, is informational and never replaces block-level provenance. [R2] | none | Fields per block. | Missing authorship: REJECT(E_PROVENANCE) | DB | U |
 | AC-PRES-006 | A block has 0..N references. Each points to an exact ContentRevision of the same job, with a role in {presents, supports, evaluation} and a position unique and contiguous within the block. [D20] | Block citing 3 revisions | Accepted. | Cross-job: REJECT(E_CROSS_JOB); bad role: REJECT(E_INVALID_ENUM) | DB+APP | I |
 | AC-PRES-007 | (block, revision, role) is unique. | none | none | REJECT(E_DUPLICATE_REFERENCE) | DB | U |
 | AC-PRES-008 | Role and type compatibility: `presents` → creative_path; `evaluation` → memory_test or pr_headline; `supports` → any other type. **[Default OI-13]** | none | none | REJECT(E_ROLE_TYPE) | APP | U |
@@ -501,6 +517,9 @@ Request kinds and their input and output tables are in §13 **[Default OI-10]**.
 | AC-PRES-019 | Version numbering is independent per presentation. | P1 at v3, P2 new | P2 starts at 1. | n/a | DB | U |
 | AC-PRES-020 | Showing a non-finalist with `presents` is allowed (it produces only the warning of 010) and never changes finalist state. | none | Accepted. | WARN(presentation_health) | APP+PROJ | U |
 | AC-PRES-021 | Presentation text is never stored as a ContentItem. [D13] | none | There is no ContentItem for block text. | Any command creating `presentation_content`: REJECT(E_INVALID_ENUM) | DB | U |
+| AC-PRES-022 | One version may contain blocks with different authors and different runs. Each copied block keeps its original `authorship` and `produced_by_run_id`. [R2] | v1 drafted by run R1; the user edits b1 (v2); run R2 rewrites b3 (v3) | In v3: b1 is `user` with no run, b2 is `ai` + R1, b3 is `ai` + R2. | n/a | APP | I |
+| AC-PRES-023 | A rewritten block (user or AI) sets `derived_from_block_id` to the exact source block, which must belong to the base version of the same presentation. A block newly added in a version has no `derived_from_block_id`. [R2] | Base v3 | Rewrite of v3's b2 accepted. | Source block from another version, another presentation or another job: REJECT(E_SOURCE_BLOCK_INVALID) | DB+APP | I |
+| AC-PRES-024 | A block rewrite never mutates the previous version: all blocks and references of version N keep identical content hashes after N+1 is created. [R2, D22] | Version N | Hashes unchanged. | Any update attempt: storage error | DB | P |
 
 ---
 
@@ -553,10 +572,11 @@ And a domain command asking for erasure is refused with E_FORBIDDEN
 
 **AC-CONTENT-101: Editing a selected AI fact** (I)
 Given audience A r1 (`ai`, `extracted_fact`, one EvidenceLink) is selected as primary
-When the user edits the description without attaching evidence
+When the user edits the description, declares `assertion_type = human_text` and attaches no evidence
 Then A r2 is `user` + `human_text` + `user_edit` with no EvidenceLink
 And unselected(r1, primary) and selected(r2, primary) are written in the same command
 And A r1 and its EvidenceLink are unchanged
+And A r2's assertion was declared by the user, not derived by the system (AC-CONTENT-031)
 
 **AC-CONTENT-102: `brief` authorship is refused** (U)
 Given any content command
@@ -574,6 +594,22 @@ When the run is committed
 Then the tension is dropped and listed in the validation report
 And no human_truth is created from it
 And the run is `partial` if other elements are valid
+
+**AC-CONTENT-105: A user fact without evidence is rejected, not relabeled** (I)
+Given job version 40 and brief v1
+When the user saves a new business_problem declared as `extracted_fact` with no EvidenceLink
+Then the command is refused with E_EVIDENCE_REQUIRED
+And the response lists `human_text` as an alternative (and `hypothesis` only if C-3 allows it)
+And no ContentItem, ContentRevision, EvidenceLink or DecisionEvent exists for it, and job version is still 40
+When the user resubmits as a new command declaring `human_text`
+Then the revision is stored as `human_text`
+
+**AC-CONTENT-106: Editing a selected fact with a bad quote leaves nothing behind** (I)
+Given audience A r1 (`extracted_fact`) is primary and audience B is secondary
+When the user edits A, declares `extracted_fact`, and attaches a quote that does not match v1
+Then the command is refused with E_EVIDENCE_INVALID
+And A r2 does not exist, no EvidenceLink was written, and no unselected or selected events were written
+And A r1 is still primary and B is still secondary
 
 ### Relations
 
@@ -628,6 +664,7 @@ And the run is `partial` or `failed` depending on the other outputs
 Given the AI proposes a valid combination K whose output text says "recommended: select"
 When the run is committed
 Then K exists with `authorship = ai`, `suggestion`, and zero DecisionEvents
+And K r1 cannot be a path_generation input until the user chooses it (AC-COMB-024)
 When the user writes selected(K r1, chosen)
 Then the event has `actor_user_id` = owner
 
@@ -638,10 +675,30 @@ Then K r2 is accepted with `change_type = relink`
 When the user tries {T2 r1, B r1}, where T2 is another truth item
 Then the command is refused with E_IDENTITY_CHANGE
 
-**AC-COMB-107: Unchosen combination as input** [Default C-1] (I)
+**AC-COMB-107: Unchosen combination as input** (I)
 Given combination K with no active `chosen` selection
 When the user creates a path_generation request with K
 Then the command is refused with E_COMBINATION_NOT_CHOSEN
+And no GenerationRequest, RunInput or GenerationRun exists for it
+
+**AC-COMB-108: Chosen belongs to the exact revision** (I)
+Given K r1 is chosen and the user edits K's label, creating K r2 (so the selection moves to K r2 per AC-DEC-024)
+When the user creates a path_generation request with K r1
+Then the command is refused with E_COMBINATION_NOT_CHOSEN
+When the user creates it with K r2
+Then it is accepted and its RunInput pins K r2
+
+**AC-COMB-109: Unchoosing before a retry** (I)
+Given path_generation request R with chosen K r1, and attempt 1 `failed`
+And the user then writes unselected(K r1, chosen)
+When the user retries R
+Then the command is refused with E_COMBINATION_NOT_CHOSEN
+And R and attempt 1 are unchanged, and no attempt 2 exists
+
+**AC-COMB-110: The AI cannot remove chosen** (I)
+Given K r1 is chosen and a combination_suggestion run outputs "replace K with K2", together with an unselected instruction
+When the run is committed
+Then K2 is stored as an AI suggestion, K r1 is still chosen, and the run wrote zero DecisionEvents
 
 ### Decisions
 
@@ -663,16 +720,18 @@ When one command writes unselected(A, primary), unselected(B, secondary), select
 Then the four events have consecutive `job_sequence` values and the same `command_id`
 And B is primary and A is secondary
 
-**AC-DEC-104: Removing the primary under secondaries** [Default OI-3] (U)
+**AC-DEC-104: Removing the primary under secondaries** (U)
 Given A is primary and B is secondary
 When the user unselects A only
 Then the command is refused with E_PRIMARY_REQUIRED
+And A is still primary and B still secondary
 
-**AC-DEC-105: A discarded primary cannot anchor a new secondary** [Default OI-3] (I)
-Given primary tension H1 is discarded (still selected, D21)
+**AC-DEC-105: A discarded primary cannot anchor a new secondary** (I)
+Given primary tension H1 is discarded with no secondaries (still selected, D21)
 When the user selects H2 as secondary
 Then the command is refused with E_PRIMARY_REQUIRED
 And the projection shows WARN(selected_but_discarded) on H1
+And H1's original `selected` event is still in the log
 
 **AC-DEC-106: Rejecting a selected revision** (U)
 Given central message CM r2 is chosen
@@ -698,6 +757,26 @@ And while X was discarded, selected(X r3, finalist) was refused with E_ITEM_DISC
 Given three finalists exist
 When the user selects a fourth
 Then it is accepted with no warning in the data model
+
+**AC-DEC-110: Discarding a primary that has secondaries** (I)
+Given audience A is primary and audiences B and C are secondary
+When the user discards A alone
+Then the command is refused with E_PRIMARY_REQUIRED and nothing changes
+When one command writes discarded(A), unselected(A, primary), unselected(B, secondary), selected(B, primary)
+Then it is accepted: A is discarded with no selection, B is primary, C is still secondary
+And no event other than those four was written
+
+**AC-DEC-111: Only the final state is checked** (I)
+Given tension H1 is primary and H2 is secondary
+When one command writes unselected(H1, primary) first and selected(H3, primary) last
+Then it is accepted, although H2 was an orphaned secondary between the two events
+And H1 holds no selection, since nothing demoted it to secondary
+
+**AC-DEC-112: A refused multi-event command leaves no partial state** (P)
+Given audience A is primary and B is secondary
+When one command writes unselected(B, secondary), selected(D, secondary), unselected(A, primary)
+Then it is refused with E_PRIMARY_REQUIRED, because the final state has secondary D but no primary
+And none of the three events exists, even though unselected(B, secondary) was valid on its own, and job version is unchanged
 
 ### Evidence
 
@@ -797,6 +876,12 @@ Given PR's latest version is v5
 When a user command declares base v4
 Then the command is refused with E_STALE_PRESENTATION_VERSION
 
+**AC-PRES-106: Mixed provenance in one version** (I)
+Given presentation PR v1 drafted by run R1 with blocks b1, b2, b3 (all `ai` + R1)
+When the user edits b1 (creating v2) and then run R2 rewrites v2's b3 (creating v3)
+Then v3's blocks are: b1'' (`user`, no run), b2'' (`ai` + R1), b3'' (`ai` + R2, `derived_from_block_id` = v2's b3)
+And v1 and v2 and all their blocks keep identical content hashes
+
 ### Errors
 
 **AC-ERR-101: Fault in the projection update** (I)
@@ -820,16 +905,20 @@ Each item states the gap, its impact on testing, and the **recommended default**
 
 ### Contradictions
 
-**C-1: Combination selection.**
-1. **Gap.** D5 says "only the user may select" combinations, but the approved matrix (§2.1, §3) gives combination **no** selection role. Taken literally, D5 has nothing to act on.
-2. **Default.** Combination supports `chosen` (uncapped, user only). A combination must be chosen before it is used as a `path_generation` input (AC-COMB-024) or as the target of a new `based_on` (AC-REL-044).
-3. **Testing impact.** AC-COMB-023, AC-COMB-024, AC-REL-044, AC-DEC-012 and AC-COMB-107 depend on it.
-4. **Alternative.** D5 only means "the AI never auto-selects", and combinations stay without selection. The tests above are then deleted and AC-COMB-022 stands alone.
+**C-3: Offering `hypothesis` to a user (introduced by R4).**
+1. **Contradiction.** R4 says the system "may explicitly offer `hypothesis` or `human_text`" when a user fact is rejected. The approved matrix (§3.1) and AC-CONTENT-008 forbid `user` + `hypothesis` for every type. If the user accepts the offered `hypothesis`, the resubmitted command must be refused.
+2. **Default (not approved).** Offer only `human_text`. Keep `user` + `hypothesis` forbidden. This preserves the matrix and the 49/79 oracle.
+3. **Alternative.** Allow `user` + `hypothesis` on the eight descriptive types, with optional evidence as for AI hypotheses. The oracle becomes 57 allowed and 71 forbidden, and hypothesis is added to the list offered on rejection.
+4. **Testing impact.** AC-CONTENT-001, AC-CONTENT-008, AC-CONTENT-033, AC-CONTENT-105 and §4.1.
 
-**C-2: Where AI provenance lives in presentations.**
-1. **Gap.** The matrix put `produced_by_run_id` on PresentationVersion. D11 (single-block rewrite) produces versions that mix blocks from different runs and authors, so version-level provenance cannot say which block came from which run.
-2. **Default.** `authorship` and `produced_by_run_id` live on PresentationBlock (AC-PRES-005). A version-level run field is optional and informational only.
-3. **Testing impact.** AC-PRES-005, AC-PRES-012, AC-PRES-013 and AC-GLOBAL-019.
+### Resolved in revision 2
+
+| Former ID | Resolved by | Where |
+|---|---|---|
+| C-1: combination selection | R1 | §3.3; AC-DEC-012; AC-REL-044; AC-COMB-023, 024, 027 to 029; AC-GEN-020; scenarios AC-COMB-105, 107 to 110 |
+| C-2: presentation provenance | R2 | AC-PRES-005, 022 to 024; scenario AC-PRES-106 |
+| OI-3: secondary without an active primary | R3 | §3.3; AC-DEC-015, 016, 042 to 046; scenarios AC-DEC-104, 105, 110 to 112 |
+| OI-16: user fact without evidence | R4 | AC-CONTENT-007, 028, 031 to 033; AC-EVID-007; scenarios AC-CONTENT-101, 105, 106 |
 
 ### Gaps
 
@@ -837,7 +926,6 @@ Each item states the gap, its impact on testing, and the **recommended default**
 |---|---|---|---|
 | OI-1 | DecisionEvent targets only ContentItem, but D10 needs presentation events. | AC-DEC-003, AC-DEC-050 to 053 | A `target_kind` (content_item, presentation) with exactly one target set. |
 | OI-2 | No approved compensating action for `archived`. | AC-DEC-051 | Archive is final in the MVP. If reversal is wanted, approve an `unarchived` action. |
-| OI-3 | D6 covers *selecting* a secondary, not *losing* the primary, nor a discarded primary. | AC-DEC-015, 016, 104, 105 | End-of-command check: secondaries require an active, non-discarded primary of the same type. Removing the last primary under secondaries is refused. |
 | OI-4 | Editing a discarded item is not specified. | AC-CONTENT-029 | Refused; restore first. |
 | OI-5 | grounded_in to two revisions of one truth item. | AC-REL-031 | Refused (same rule as `combines`). |
 | OI-6 | Scope of `expected_job_version`. Every run commit advances `job_version`, so user commands go stale often during generation. | AC-GLOBAL-015, AC-ERR-015 | Required on user commands. The client refreshes and resubmits. Revisit if stale conflicts become frequent (a narrower per-item version is the alternative). |
@@ -845,16 +933,17 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | OI-8 | The matrix says `claimed_fact_unverified` blocks selection until reviewed, but no review action exists. | AC-DEC-028, AC-EVID-104 | The select command carries an explicit acknowledgment of the warning, recorded on the event. No new action. |
 | OI-9 | Normalization steps for `changed` drift are undefined. | AC-EVID-015 to 018, 102 | algorithm v1 = Unicode NFC, case-fold, whitespace collapsed to one space, and the typographic quotes “ ” ‘ ’ mapped to straight quotes. No fuzzy distance in the MVP. |
 | OI-10 | Per-kind input and output tables are not in the matrix, and D11 needs a block-rewrite kind and a `presentation_block` input kind. | AC-GEN-003, 016 | Table below. |
-| OI-11 | Retry when an input became inactive after the first attempt. | AC-GEN-008 | Refused; the user creates a new request. |
+| OI-11 | Retry when an input was rejected or discarded after the first attempt. (A combination that lost `chosen` is settled by R1: AC-COMB-029.) | AC-GEN-008 | Refused; the user creates a new request. |
 | OI-12 | A block rewrite completing after the presentation advanced; reference handling on rewrite. | AC-PRES-014, 016, 102 | Not applied, with a warning; references carried unchanged. |
 | OI-13 | Block reference role/type compatibility; new references to inactive targets. | AC-PRES-008, 009 | presents → creative_path; evaluation → tests; supports → other types. New references to inactive targets are refused. |
 | OI-14 | Minimum version and block content. | AC-PRES-003, 004 | ≥1 block per version; block text non-empty. |
 | OI-15 | The matrix allowed "drop *or* reclassify" for a tension missing fields. | AC-CONTENT-024 | Drop, never reclassify (a type the AI did not claim would be invented). |
-| OI-16 | D25 says a fact without evidence "must be stored as a weaker claim type"; it is unclear whether that also applies to user commands. | AC-CONTENT-007, AC-EVID-007 | AI output: downgrade. User command: reject, so the system never relabels the user's explicit claim. Both satisfy D25, since no unverified fact is ever stored. |
 | OI-17 | Run status names (`completed` here, `succeeded` in the v1.2 review) and the lease or `interrupted` rule are not confirmed. | AC-GEN-011, 022 | `completed`; leases expire into `failed / interrupted`. |
 | OI-18 | A new SourceVersion with text identical to the latest. | none yet | Refused with E_NO_CHANGE. |
 | OI-19 | D19 allows drift as a projection or a separate entity. | AC-EVID-014, 018 | Projection; the tests assert only observable reads, so either implementation passes. |
 | OI-20 | `job_sequence` on GenerationRun and PresentationVersion is not stated in the matrix. | AC-GLOBAL-012 | Assign it to both. |
+| OI-21 | R1 requires `chosen` for combinations used as **generation inputs**. It does not say whether a **user-written** path may be `based_on` an unchosen combination. | AC-REL-054 | Require `chosen` there too, so a combination is committed the same way whichever author writes the path. |
+| OI-22 | Whether a `relink` of a selected revision moves the selection, as a `user_edit` does. This applies to human_tension, and to combination now that combinations are selectable (R1). | AC-DEC-047 | Yes: the relink command writes explicit `unselected(old)` and `selected(new, same role)`. |
 
 ### Default request-kind table (OI-10)
 
@@ -865,7 +954,7 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | rewrite | anchor: 1 revision of any type except human_note | brief, strategy | next revision of the anchor's item | carry-forward of the anchor's edges |
 | material_expansion | brief: 1 | strategy, existing materials | human_truth, brand_element, category_element, creative_mechanism | none |
 | combination_suggestion | materials: ≥2 human-side or brand-side revisions | mechanisms, strategy | combination | combines (members ⊆ inputs) |
-| path_generation | at least one chosen strategy revision | combination: 0..1 (chosen, C-1); restrictions; human_note | creative_path | based_on when a combination input exists |
+| path_generation | at least one chosen strategy revision | combination: 0..1, and the exact revision must currently be chosen (R1); restrictions; human_note | creative_path | based_on when a combination input exists |
 | path_evaluation | subject: exactly 1 creative_path revision | strategy | memory_test, pr_headline | evaluates → subject |
 | presentation_draft | presents: ≥1 creative_path revision | strategy, facts, tests | one PresentationVersion (new presentation or new version) | block references |
 | presentation_block_rewrite | source block: exactly 1 PresentationBlock, plus its referenced revisions | user_instruction | one replacement block in a new PresentationVersion | references carried from the source block |
@@ -880,13 +969,13 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | D2 | ≥1 brand-side component | AC-COMB-002, 009, 103 |
 | D3 | Mechanism 0 or 1 | AC-COMB-003 to 005, 102 |
 | D4 | ≤5 components | AC-COMB-006, 007, 101 |
-| D5 | AI proposes combinations; only the user selects | AC-COMB-021 to 024, 105; C-1 |
-| D6 | Secondary requires primary | AC-DEC-015, 016, 101, 104 |
+| D5 | AI proposes combinations; only the user selects | AC-COMB-021 to 024, 027 to 029, 105, 107 to 110 (R1) |
+| D6 | Secondary requires primary | AC-DEC-015, 016, 042 to 046, 101, 104, 105, 110 to 112 (R3) |
 | D7 | No finalist cap; UI recommends 3 | AC-DEC-018, 019, 109 |
 | D8 | Explicit role changes; no auto-demotion | AC-DEC-013, 014, 017, 102, 103 |
 | D9 | Note answers exactly one question; no loose notes | AC-REL-020 to 023, AC-CONTENT-013 |
 | D10 | Presentations archive and discard; no favorite | AC-DEC-050 to 053, AC-PRES-017, 103 |
-| D11 | Block rewrite gives a new version with run and source block | AC-PRES-012 to 016, 101; C-2 |
+| D11 | Block rewrite gives a new version with run and source block | AC-PRES-005, 012 to 016, 022 to 024, 101, 106 (R2) |
 | D12 | No `brief` authorship | AC-CONTENT-014, 102 |
 | D13 | No `presentation_content` | AC-CONTENT-016, AC-PRES-021 |
 | D14 | Only `schema_version` | AC-CONTENT-023, 025 |
@@ -900,4 +989,15 @@ Each item states the gap, its impact on testing, and the **recommended default**
 | D22 | Immutability | AC-GLOBAL-001, 002, AC-PRES-002 |
 | D23 | Exact revision references | AC-GLOBAL-007 to 009, §5 |
 | D24 | AI and human distinguishable and traceable | AC-GLOBAL-018, 019, AC-GEN-017, 019 |
-| D25 | Fact validated in the same transaction, else weaker | AC-CONTENT-002, 007, AC-EVID-004 to 007 |
+| D25 | Fact validated in the same transaction, else weaker | AC-CONTENT-002, 007, 028, 031 to 033, 105, 106, AC-EVID-004 to 007 (R4) |
+
+---
+
+## Appendix B: Revision 2 decisions
+
+| ID | Decision | Resolves |
+|---|---|---|
+| R1 | Combinations support `chosen`, with no cap. Only the user assigns or removes it. The exact combination revision must currently be chosen before it is used as a path generation input. AI output alone never assigns `chosen`. | C-1 |
+| R2 | Provenance is per PresentationBlock: `authorship`, optional `produced_by_run_id`, and the exact source block on rewrite. One version may mix authors and runs. A rewrite creates a new immutable version and never mutates the previous one. | C-2 |
+| R3 | Validate the final state of the whole command. The final state never holds a secondary audience or tension without an active, non-discarded primary of the same type. A command may emit several explicit events; no automatic role change. A discarded primary never supports secondaries. | OI-3 |
+| R4 | A human command saving an `extracted_fact` without validated evidence in the same transaction is rejected. The system may offer alternatives explicitly but never reclassifies silently. A rejected command creates no revision, link, event or partial state. | OI-16 (introduces C-3) |
