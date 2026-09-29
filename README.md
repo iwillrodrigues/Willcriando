@@ -55,12 +55,14 @@ npm run dev                  # http://localhost:3000
 | `NOTION_API_KEY` | Server only | Catalog synchronization |
 | `NOTION_CREATIVE_PATHS_DATABASE_ID` | Server only | Catalog synchronization |
 
-Rules enforced in code and tests:
+Rules in code:
 
-1. Server secrets never use the `NEXT_PUBLIC_` prefix.
-2. Server secrets are read only through `lib/env/server.ts`, which imports `server-only`. Importing it from a Client Component fails the build.
-3. Each integration validates its own variables when it is called, never at import or build time. Lint, typecheck, tests and build therefore need no credential.
-4. Error messages name missing variables and never include values.
+1. Server secrets never use the `NEXT_PUBLIC_` prefix. Covered by unit tests.
+2. Server secrets are read only through `lib/env/server.ts`, which imports `server-only`, so Next.js rejects the module if a Client Component imports it. No committed automated test covers this boundary; it was checked manually during implementation.
+3. Each integration validates its own variables when it is called, never at import or build time. Covered by unit tests. Lint, typecheck, tests and build therefore need no credential.
+4. Error messages name missing variables and never include values. Covered by unit tests.
+
+The unit tests (`lib/env/schema.test.ts`, `lib/env/server.test.ts`) cover the environment schemas and helpers. They replace `server-only` with a stub, so they do not exercise the client import boundary.
 
 ## Continuous integration
 
