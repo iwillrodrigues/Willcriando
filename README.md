@@ -6,15 +6,17 @@ A web product that helps an individual advertising creative turn an arbitrary br
 
 | Area | State |
 |---|---|
-| Next.js application (App Router, TypeScript strict) | S1: email and password accounts, job list and creation, raw briefing saved as immutable revisions |
-| Database (`supabase/`) | Migrations for pgTAP and S1 (`jobs`, `briefing_revisions`, RLS, one save function), pgTAP tests |
+| Next.js application (App Router, TypeScript strict) | Accounts, jobs, immutable briefing revisions (S1); AI analysis, path recommendations, catalog explorer, manual and random selection, concept generation and editing, finalists, editable presentation (S2) |
+| Database (`supabase/`) | Migrations for pgTAP, S1 and S2, applied to the hosted development project; pgTAP tests for both |
+| AI (`lib/ai/`) | Anthropic Messages API with structured output, validated again with Zod; server-only |
+| Catalog import (`scripts/import-catalog.ts`) | Notion → Supabase snapshot of exactly 63 paths, all-or-nothing validation |
 | Environment handling | `lib/env/`: Zod schemas, a server-only module for secrets, validation on use, unit tests |
 | Quality checks | ESLint, TypeScript, Vitest, production build, GitHub Actions CI |
 | Domain model documents | `docs/data-model/` (v1.1 to v1.4) |
 | Current domain decisions | `docs/adr/0001-catalog-creative-paths.md` |
 | Legacy prototype | `prototype/trilha-criativa-legacy.html` (simulated data, obsolete stages) |
 
-**Not implemented yet:** AI analysis, Notion synchronization, the creative path catalog, path selection, concepts, finalists, presentation and deployment. The S1 migration is written and statically checked but has not been applied to the hosted project yet (see "Supabase (S1)").
+**Not done yet:** the catalog has not been imported (it needs a Notion token), no AI key is configured, and the app is not deployed. Until then the app shows those steps as unavailable instead of simulating them.
 
 ## Product flow
 
@@ -89,6 +91,22 @@ Access rules (enforced by the database):
 2. Briefing revisions are append-only; they are written only through `save_briefing_revision`, which checks ownership and numbers revisions under a row lock.
 3. The `anon` role has no access to application tables or functions.
 
+## Catalog import (S2)
+
+The 63 editorial paths are copied from Notion into a versioned snapshot; the app never reads Notion at request time.
+
+```bash
+node scripts/import-catalog.ts --inspect   # property names and types, detected mapping
+node scripts/import-catalog.ts             # fetch, map and validate; writes nothing
+node scripts/import-catalog.ts --apply     # validate, then store the snapshot
+```
+
+It needs `NOTION_API_KEY`, `NOTION_CREATIVE_PATHS_DATABASE_ID` and, for `--apply`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, from the environment only. Any discrepancy (not exactly 63 valid pages, duplicate ids or numbers, missing text, ambiguous mapping) stops it before anything is written. Re-importing identical content is a no-op.
+
+## Server secrets for a deployment
+
+Set in the hosting provider's secret store, never in files: `SUPABASE_SERVICE_ROLE_KEY` (backend generation functions only), `AI_PROVIDER_API_KEY` (Anthropic), optional `AI_MODEL`. The public variables are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+
 ## Next increment
 
-S2: publish the app so S1 can be tested at a public URL. The creative path catalog, AI analysis and the later stages follow.
+Import the catalog, configure the AI key and deploy a test environment, then run the browser test of the whole flow.
