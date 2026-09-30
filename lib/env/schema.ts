@@ -27,7 +27,14 @@ export const serverSchemas = {
     SUPABASE_SERVICE_ROLE_KEY: requiredString,
   }),
   ai: z.object({
+    /** Anthropic API key. */
     AI_PROVIDER_API_KEY: requiredString,
+    /** Optional model override; the app defaults to its tested model. */
+    AI_MODEL: z
+      .string()
+      .trim()
+      .optional()
+      .transform((value) => (value ? value : undefined)),
   }),
   notion: z.object({
     NOTION_API_KEY: requiredString,

@@ -32,7 +32,46 @@ const DB_MESSAGES: Record<string, string> = {
   TRILHA_UNAUTHENTICATED: "Sua sessão expirou. Entre novamente.",
   TRILHA_JOB_NOT_FOUND: "Job não encontrado ou sem acesso.",
   TRILHA_INVALID_CONTENT: "Escreva o briefing antes de salvar.",
+  TRILHA_NO_BRIEFING: "Salve o briefing antes de continuar.",
+  TRILHA_CATALOG_EMPTY: "O catálogo de caminhos ainda não foi importado.",
+  TRILHA_CATALOG_CHANGED: "O catálogo foi atualizado. Tente de novo.",
+  TRILHA_PATH_NOT_FOUND: "Caminho não encontrado no catálogo atual.",
+  TRILHA_INVALID_SELECTION: "Esta escolha não vale mais. Recarregue a página e escolha de novo.",
+  TRILHA_SELECTION_NOT_ACTIVE: "O caminho ativo mudou. Recarregue a página.",
+  TRILHA_NO_FINALISTS: "Marque pelo menos um conceito como finalista.",
+  TRILHA_INVALID_RETRY: "Esta tentativa não pode ser repetida. Recarregue a página.",
+  TRILHA_CONCEPT_NOT_FOUND: "Conceito não encontrado ou sem acesso.",
+  TRILHA_PRESENTATION_NOT_FOUND: "Apresentação não encontrada ou sem acesso.",
 };
+
+/** Codes stored on failed generation requests, and pre-flight failures. */
+const GENERATION_MESSAGES: Record<string, string> = {
+  AI_NOT_CONFIGURED: "A IA não está configurada neste ambiente (falta a chave do provedor no servidor).",
+  SERVER_NOT_CONFIGURED: "O servidor não está configurado para gerar com IA (falta a chave de serviço do banco).",
+  AI_AUTH: "O provedor de IA recusou a credencial configurada.",
+  AI_RATE_LIMIT: "Limite de uso da IA atingido. Aguarde um pouco e tente de novo.",
+  AI_TIMEOUT: "A IA demorou demais para responder. Tente de novo.",
+  AI_UNAVAILABLE: "A IA está indisponível agora. Tente de novo em instantes.",
+  AI_REFUSAL: "A IA recusou este pedido. Ajuste o briefing e tente de novo.",
+  AI_TRUNCATED: "A resposta da IA veio incompleta. Tente de novo.",
+  AI_INVALID_OUTPUT: "A resposta da IA veio em formato inválido e não foi salva. Tente de novo.",
+  AI_ERROR: "O provedor de IA retornou um erro. Tente de novo.",
+  TRILHA_STALE: "A tentativa anterior não terminou. Tente de novo.",
+  PREVIOUS_ATTEMPT_FAILED: "A última tentativa falhou. Use “Tentar de novo”.",
+  INTERNAL_ERROR: "Algo deu errado ao gerar. Tente de novo.",
+  DB_ERROR: "Não foi possível salvar o resultado. Tente de novo.",
+};
+
+export function generationErrorMessage(code: string | null | undefined): string {
+  if (code && Object.hasOwn(GENERATION_MESSAGES, code)) return GENERATION_MESSAGES[code];
+  if (code && Object.hasOwn(DB_MESSAGES, code)) return DB_MESSAGES[code];
+  return GENERIC_ERROR;
+}
+
+/** Codes where a retry cannot help until someone changes configuration. */
+export function isConfigurationError(code: string | null | undefined): boolean {
+  return code === "AI_NOT_CONFIGURED" || code === "SERVER_NOT_CONFIGURED" || code === "AI_AUTH";
+}
 
 /** Postgres SQLSTATE codes that have a meaningful user message. */
 const SQLSTATE_MESSAGES: Record<string, string> = {
