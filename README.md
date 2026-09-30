@@ -6,14 +6,15 @@ A web product that helps an individual advertising creative turn an arbitrary br
 
 | Area | State |
 |---|---|
-| Next.js application (App Router, TypeScript strict) | Minimal shell: one Portuguese page saying the MVP is under construction |
+| Next.js application (App Router, TypeScript strict) | S1: email and password accounts, job list and creation, raw briefing saved as immutable revisions |
+| Database (`supabase/`) | Migrations for pgTAP and S1 (`jobs`, `briefing_revisions`, RLS, one save function), pgTAP tests |
 | Environment handling | `lib/env/`: Zod schemas, a server-only module for secrets, validation on use, unit tests |
 | Quality checks | ESLint, TypeScript, Vitest, production build, GitHub Actions CI |
 | Domain model documents | `docs/data-model/` (v1.1 to v1.4) |
 | Current domain decisions | `docs/adr/0001-catalog-creative-paths.md` |
 | Legacy prototype | `prototype/trilha-criativa-legacy.html` (simulated data, obsolete stages) |
 
-**Not implemented yet:** AI analysis, Notion synchronization, Supabase, persistence, authentication, and every product screen. No external integration has been built or tested.
+**Not implemented yet:** AI analysis, Notion synchronization, the creative path catalog, path selection, concepts, finalists, presentation and deployment. The S1 migration is written and statically checked but has not been applied to the hosted project yet (see "Supabase (S1)").
 
 ## Product flow
 
@@ -27,7 +28,7 @@ Requirements: Node.js 22.12 or newer, and npm.
 
 ```bash
 npm ci
-cp .env.example .env.local   # optional for now: no variable is required yet
+cp .env.example .env.local   # then fill the two NEXT_PUBLIC_SUPABASE_* values
 npm run dev                  # http://localhost:3000
 ```
 
@@ -48,9 +49,9 @@ npm run dev                  # http://localhost:3000
 
 | Variable | Scope | Used by (future) |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Public (browser) | Supabase client |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public (browser) | Supabase client, protected by row-level security |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Privileged database tasks |
+| `NEXT_PUBLIC_SUPABASE_URL` | Public | Supabase clients (in use since S1) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | Supabase clients, protected by row-level security (in use since S1) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Reserved for privileged tasks; not used by S1 |
 | `AI_PROVIDER_API_KEY` | Server only | AI analysis, recommendations, concepts |
 | `NOTION_API_KEY` | Server only | Catalog synchronization |
 | `NOTION_CREATIVE_PATHS_DATABASE_ID` | Server only | Catalog synchronization |
@@ -68,14 +69,26 @@ The unit tests (`lib/env/schema.test.ts`, `lib/env/server.test.ts`) cover the en
 
 `.github/workflows/ci.yml` runs on every push and pull request. It installs with `npm ci` from the committed lockfile, then runs lint, typecheck, unit tests and build. It uses no secrets.
 
+## Supabase (S1)
+
+Development uses a hosted Supabase project with fictional data only. No Docker or local Supabase is needed.
+
+Migrations live in `supabase/migrations/` and are applied to the hosted project in timestamp order. When a migration is applied through the Supabase connector, the remote history records its own timestamp; rename the file to that timestamp so both histories match.
+
+Database tests live in `supabase/tests/database/`. Each file runs in one transaction, rolls back, and ends with a single `SELECT` of the full TAP output, so it can be submitted as one SQL payload. Any failing assertion raises an error that lists it.
+
+Auth settings the app expects (Supabase dashboard, Authentication):
+
+1. Email provider enabled, with email and password sign-in.
+2. If "Confirm email" is on, add `<app origin>/auth/confirm` to the allowed Redirect URLs (for example `http://localhost:3000/auth/confirm`). The confirmation link must be opened in the browser that created the account.
+3. If "Confirm email" is off, sign-up signs the user in directly.
+
+Access rules (enforced by the database):
+
+1. A user sees and changes only their own jobs.
+2. Briefing revisions are append-only; they are written only through `save_briefing_revision`, which checks ownership and numbers revisions under a row lock.
+3. The `anon` role has no access to application tables or functions.
+
 ## Next increment
 
-Supabase foundation:
-
-1. authentication for a single user;
-2. `jobs` table;
-3. immutable `briefing_versions`;
-4. row-level security by owner;
-5. creating and reopening an isolated job that survives a reload.
-
-AI, Notion and product screens come after that.
+S2: publish the app so S1 can be tested at a public URL. The creative path catalog, AI analysis and the later stages follow.
