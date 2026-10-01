@@ -2,7 +2,7 @@
 -- finalists and presentations.
 --
 -- Runs as one transaction and rolls back, so no fixture survives. Fixtures
--- are fictional: users A and B, and a 63-item test catalog whose entries are
+-- are fictional: users A and B, and a 67-item test catalog whose entries are
 -- labelled "Caminho fictício N". They are not the editorial catalog.
 --
 -- Same single-payload format as the S1 tests: output goes to pg_temp.tap,
@@ -14,7 +14,7 @@ create temporary table tap (n serial, line text) on commit drop;
 grant all on table tap to public;
 grant usage on sequence tap_n_seq to public;
 
-select extensions.plan(56);
+select extensions.plan(60);
 
 insert into auth.users (id, email, aud, role)
 values
@@ -30,7 +30,7 @@ select jsonb_agg(jsonb_build_object(
          'content', 'Explicação fictícia do caminho ' || n || '.',
          'prompt_text', 'Prompt fictício ' || n || '.',
          'source_last_edited_at', '2026-09-01T00:00:00Z') order by n) as paths
-from generate_series(1, 63) n;
+from generate_series(1, 67) n;
 grant select on fixture_catalog to public;
 
 -- ---------------------------------------------------------------------------
@@ -100,12 +100,28 @@ set local role service_role;
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select jsonb_path_query_array(paths, '$[0 to 61]') from fixture_catalog)) $q$,
-  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 62 paths is rejected');
+        (select jsonb_path_query_array(paths, '$[0 to 65]') from fixture_catalog)) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 66 paths is rejected');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select jsonb_set(paths, '{62,path_number}', '1') from fixture_catalog)) $q$,
+        (select paths || jsonb_build_array(jsonb_set(jsonb_set(paths -> 0, '{source_page_id}', '"pagina-ficticia-68"'),
+                                                     '{path_number}', '68')) from fixture_catalog)) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 68 paths is rejected');
+
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.import_catalog_snapshot('base-ficticia',
+        (select jsonb_set(paths, '{66,path_number}', '68') from fixture_catalog)) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'path number 68 is out of range');
+
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.import_catalog_snapshot('base-ficticia',
+        (select jsonb_set(paths, '{0,path_number}', '0') from fixture_catalog)) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'path number 0 is out of range');
+
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.import_catalog_snapshot('base-ficticia',
+        (select jsonb_set(paths, '{66,path_number}', '1') from fixture_catalog)) $q$,
   '22023', 'TRILHA_INVALID_CATALOG', 'duplicate path numbers are rejected');
 
 select set_config('trilha.snapshot',
@@ -119,7 +135,12 @@ reset role;
 
 insert into tap(line) select extensions.is(
   (select count(*)::int from public.creative_paths where snapshot_id = current_setting('trilha.snapshot')::uuid),
-  63, 'the snapshot holds exactly 63 paths');
+  67, 'the snapshot holds exactly 67 paths');
+
+insert into tap(line) select extensions.is(
+  (select array_agg(path_number order by path_number) from public.creative_paths
+    where snapshot_id = current_setting('trilha.snapshot')::uuid),
+  (select array_agg(n) from generate_series(1, 67) n), 'the snapshot holds path numbers 1 to 67, including 67');
 
 insert into tap(line) select extensions.is(
   (select count(*)::int from public.catalog_snapshots where is_current), 1, 'exactly one snapshot is current');
