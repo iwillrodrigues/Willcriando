@@ -9,7 +9,7 @@ A web product that helps an individual advertising creative turn an arbitrary br
 | Next.js application (App Router, TypeScript strict) | Accounts, jobs, immutable briefing revisions (S1); AI analysis, path recommendations, catalog explorer, manual and random selection, concept generation and editing, finalists, editable presentation (S2) |
 | Database (`supabase/`) | Migrations for pgTAP, S1 and S2, applied to the hosted development project; pgTAP tests for both |
 | AI (`lib/ai/`) | Anthropic Messages API with structured output, validated again with Zod; server-only |
-| Catalog import (`scripts/import-catalog.ts`) | Notion → Supabase snapshot of exactly 63 paths, all-or-nothing validation |
+| Catalog import (`scripts/import-catalog.ts`) | Notion → Supabase snapshot of exactly 67 paths, all-or-nothing validation |
 | Environment handling | `lib/env/`: Zod schemas, a server-only module for secrets, validation on use, unit tests |
 | Quality checks | ESLint, TypeScript, Vitest, production build, GitHub Actions CI |
 | Domain model documents | `docs/data-model/` (v1.1 to v1.4) |
@@ -93,7 +93,7 @@ Access rules (enforced by the database):
 
 ## Catalog import (S2)
 
-The 63 editorial paths are copied from Notion into a versioned snapshot; the app never reads Notion at request time.
+The 67 editorial paths are copied from Notion into a versioned snapshot; the app never reads Notion at request time.
 
 ```bash
 node scripts/import-catalog.ts --inspect   # property names and types, detected mapping
@@ -101,7 +101,7 @@ node scripts/import-catalog.ts             # fetch, map and validate; writes not
 node scripts/import-catalog.ts --apply     # validate, then store the snapshot
 ```
 
-It needs `NOTION_CREATIVE_PATHS_DATABASE_ID`, `NOTION_API_KEY` (optional where the environment injects the Notion credential; in cloud sessions run it with `NODE_USE_ENV_PROXY=1`) and, for `--apply`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, from the environment only. Any discrepancy (not exactly 63 valid pages, duplicate ids or numbers, missing text, ambiguous mapping) stops it before anything is written. Re-importing identical content is a no-op.
+It needs `NOTION_CREATIVE_PATHS_DATABASE_ID`, `NOTION_API_KEY` (optional where the environment injects the Notion credential; in cloud sessions run it with `NODE_USE_ENV_PROXY=1`) and, for `--apply`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, from the environment only. Any discrepancy (not exactly 67 valid pages, duplicate ids or numbers, missing text, ambiguous mapping) stops it before anything is written. Re-importing identical content is a no-op.
 
 ## Server secrets for a deployment
 

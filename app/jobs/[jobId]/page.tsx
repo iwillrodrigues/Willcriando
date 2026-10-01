@@ -83,7 +83,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
           <p className={styles.muted}>Salve o briefing para analisar.</p>
         ) : !catalog ? (
           <p className={styles.notice}>
-            O catálogo de 63 caminhos ainda não foi importado neste ambiente. A análise e as recomendações ficam disponíveis depois da importação.
+            O catálogo de 67 caminhos ainda não foi importado neste ambiente. A análise e as recomendações ficam disponíveis depois da importação.
           </p>
         ) : analysis ? (
           <>
@@ -184,7 +184,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         )}
         <div className={styles.row}>
           <Link className={styles.link} href={`/jobs/${job.id}/caminhos`}>
-            Explorar os {catalog?.paths.length ?? 63} caminhos, escolher ou sortear →
+            Explorar os {catalog?.paths.length ?? 67} caminhos, escolher ou sortear →
           </Link>
         </div>
       </section>

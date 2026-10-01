@@ -7,7 +7,7 @@
  * text, never rewritten, summarized or translated.
  */
 
-export const EXPECTED_PATH_COUNT = 63;
+export const EXPECTED_PATH_COUNT = 67;
 
 export type RichText = { plain_text?: string };
 
@@ -250,7 +250,7 @@ export function mapPage(page: NotionPage, mapping: Mapping, bodyText: string | n
   };
 }
 
-/** Exactly 63 records, unique ids, numbers exactly 1..63. Throws otherwise. */
+/** Exactly 67 records, unique ids, numbers exactly 1..67. Throws otherwise. */
 export function validateCatalog(records: readonly CatalogRecord[], mappingProblems: readonly string[] = []): CatalogRecord[] {
   const problems = [...mappingProblems];
   if (records.length !== EXPECTED_PATH_COUNT) {

@@ -1,5 +1,5 @@
 /**
- * Imports the 63-path editorial catalog from Notion into Supabase.
+ * Imports the 67-path editorial catalog from Notion into Supabase.
  *
  *   node scripts/import-catalog.ts --inspect   schema and detected mapping only
  *   node scripts/import-catalog.ts             fetch, map and validate (dry run)
@@ -16,7 +16,7 @@
  * NOTION_PROP_CONTENT (a property name or "body"). NOTION_API_VERSION
  * defaults to 2022-06-28.
  *
- * The import is all or nothing: any discrepancy (not exactly 63 valid pages,
+ * The import is all or nothing: any discrepancy (not exactly 67 valid pages,
  * duplicate ids or numbers, missing required text, ambiguous mapping,
  * inaccessible page) stops it before anything is written. Importing the same
  * content twice is a no-op in the database.

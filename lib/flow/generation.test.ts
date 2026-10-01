@@ -23,7 +23,7 @@ vi.mock("@/lib/ai/client", async () => {
   return { AiError, aiModel: () => aiModel(), generateStructured: (...a: unknown[]) => generateStructured(...a) };
 });
 
-const catalogPaths = Array.from({ length: 63 }, (_, i) => ({
+const catalogPaths = Array.from({ length: 67 }, (_, i) => ({
   id: `path-${i + 1}`,
   path_number: i + 1,
   title: `Caminho fictício ${i + 1}`,

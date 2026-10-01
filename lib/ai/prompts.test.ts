@@ -16,7 +16,7 @@ describe("prompts", () => {
   });
 
   it("lists every catalog path in the analysis prompt, verbatim", () => {
-    const catalog = Array.from({ length: 63 }, (_, i) => path(i + 1));
+    const catalog = Array.from({ length: 67 }, (_, i) => path(i + 1));
     const { system, user } = analysisPrompt("Briefing fictício.", catalog);
     for (const p of catalog) {
       expect(system).toContain(`<caminho numero="${p.path_number}">`);

@@ -61,7 +61,7 @@ export default async function PathsPage(props: PageProps<"/jobs/[jobId]/caminhos
       </p>
 
       {!catalog ? (
-        <p className={styles.notice}>O catálogo de 63 caminhos ainda não foi importado neste ambiente.</p>
+        <p className={styles.notice}>O catálogo de 67 caminhos ainda não foi importado neste ambiente.</p>
       ) : (
         <>
           {!hasBriefing && <p className={styles.notice}>Salve o briefing do job antes de escolher um caminho.</p>}

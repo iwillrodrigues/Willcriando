@@ -4,6 +4,7 @@ import {
   blocksToText,
   CatalogDiscrepancy,
   detectMapping,
+  EXPECTED_PATH_COUNT,
   mapPage,
   notionFailureMessage,
   notionHeaders,
@@ -106,25 +107,31 @@ describe("mapPage", () => {
 });
 
 describe("validateCatalog", () => {
-  it("accepts exactly 63 unique paths numbered 1 to 63", () => {
-    expect(validateCatalog(records(63))).toHaveLength(63);
+  it("expects the official catalog size of 67", () => {
+    expect(EXPECTED_PATH_COUNT).toBe(67);
   });
 
-  it("rejects 62 or 64 paths", () => {
-    expect(() => validateCatalog(records(62))).toThrowError(/found 62/);
-    const extra = [...records(63), { ...records(1)[0], source_page_id: "extra", path_number: 64 }];
-    expect(() => validateCatalog(extra)).toThrowError(CatalogDiscrepancy);
+  it("accepts exactly 67 unique paths numbered 1 to 67", () => {
+    expect(validateCatalog(records(67))).toHaveLength(67);
+  });
+
+  it("rejects 63, 66 or 68 paths", () => {
+    expect(() => validateCatalog(records(63))).toThrowError(/found 63/);
+    expect(() => validateCatalog(records(66))).toThrowError(/found 66/);
+    const extra = [...records(67), { ...records(1)[0], source_page_id: "extra", path_number: 68 }];
+    expect(() => validateCatalog(extra)).toThrowError(/found 68/);
+    expect(() => validateCatalog(extra)).toThrowError(/outside 1-67: 68/);
   });
 
   it("rejects duplicated ids and numbers", () => {
-    const dupNumber = records(63).map((r) => (r.path_number === 63 ? { ...r, path_number: 1 } : r));
+    const dupNumber = records(67).map((r) => (r.path_number === 67 ? { ...r, path_number: 1 } : r));
     expect(() => validateCatalog(dupNumber)).toThrowError(/appears 2 times/);
-    const dupId = records(63).map((r) => (r.path_number === 63 ? { ...r, source_page_id: "p1" } : r));
+    const dupId = records(67).map((r) => (r.path_number === 67 ? { ...r, source_page_id: "p1" } : r));
     expect(() => validateCatalog(dupId)).toThrowError(/Source page p1 appears 2 times/);
   });
 
   it("carries mapping problems into the stop", () => {
-    expect(() => validateCatalog(records(63), ["page x has an empty title."])).toThrowError(/empty title/);
+    expect(() => validateCatalog(records(67), ["page x has an empty title."])).toThrowError(/empty title/);
   });
 });
 

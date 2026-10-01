@@ -8,7 +8,7 @@ import {
   toPresentationContent,
 } from "./schemas";
 
-const catalog = new Set(Array.from({ length: 63 }, (_, i) => i + 1));
+const catalog = new Set(Array.from({ length: 67 }, (_, i) => i + 1));
 
 const analysis = (recs: { path_number: number; reasoning: string }[]) => ({
   summary: "Resumo fictício.",
@@ -26,7 +26,7 @@ describe("analysis output", () => {
     const value = analysis([
       { path_number: 1, reasoning: "a" },
       { path_number: 2, reasoning: "b" },
-      { path_number: 63, reasoning: "c" },
+      { path_number: 67, reasoning: "c" },
     ]);
     expect(analysisStrictSchema(catalog).safeParse(value).success).toBe(true);
   });
@@ -35,7 +35,7 @@ describe("analysis output", () => {
     const value = analysis([
       { path_number: 1, reasoning: "a" },
       { path_number: 2, reasoning: "b" },
-      { path_number: 64, reasoning: "c" },
+      { path_number: 68, reasoning: "c" },
     ]);
     expect(analysisStrictSchema(catalog).safeParse(value).success).toBe(false);
   });
