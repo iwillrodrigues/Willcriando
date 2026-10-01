@@ -2,8 +2,10 @@
 -- finalists and presentations.
 --
 -- Runs as one transaction and rolls back, so no fixture survives. Fixtures
--- are fictional: users A and B, and a 67-item test catalog whose entries are
--- labelled "Caminho fictício N". They are not the editorial catalog.
+-- are fictional: users A and B, and a 67-node test catalog with the approved
+-- shape (1.2-1.6 without a parent, 2-52 with 9 and 23 as empty group headers,
+-- 9.1-9.6, 23.1-23.5) whose entries are labelled "Caminho fictício <code>".
+-- They are not the editorial catalog.
 --
 -- Same single-payload format as the S1 tests: output goes to pg_temp.tap,
 -- any "not ok" raises, and finish(true) raises on a plan mismatch.
@@ -14,7 +16,7 @@ create temporary table tap (n serial, line text) on commit drop;
 grant all on table tap to public;
 grant usage on sequence tap_n_seq to public;
 
-select extensions.plan(60);
+select extensions.plan(70);
 
 insert into auth.users (id, email, aud, role)
 values
@@ -22,16 +24,34 @@ values
   ('00000000-0000-4000-8000-00000000000b', 'usuario.b@exemplo.test', 'authenticated', 'authenticated');
 
 create temporary table fixture_catalog on commit drop as
+with codes as (
+  select '1.' || m as code from generate_series(2, 6) m
+  union all select n::text from generate_series(2, 52) n
+  union all select '9.' || m from generate_series(1, 6) m
+  union all select '23.' || m from generate_series(1, 5) m
+)
 select jsonb_agg(jsonb_build_object(
-         'source_page_id', 'pagina-ficticia-' || n,
-         'path_number', n,
-         'title', 'Caminho fictício ' || n,
-         'section', 'Seção fictícia ' || ((n - 1) / 21 + 1),
-         'content', 'Explicação fictícia do caminho ' || n || '.',
-         'prompt_text', 'Prompt fictício ' || n || '.',
-         'source_last_edited_at', '2026-09-01T00:00:00Z') order by n) as paths
-from generate_series(1, 67) n;
+         'source_page_id', 'pagina-ficticia-' || code,
+         'editorial_code', code,
+         'title', 'Caminho fictício ' || code,
+         'section', case when code like '%.%' then 'Subcaminho' else 'Caminho' end,
+         'content', case when code in ('9', '23') then '' else 'Explicação fictícia do caminho ' || code || '.' end,
+         'prompt_text', case when code in ('9', '23') then '' else 'Prompt fictício ' || code || '.' end,
+         'source_last_edited_at', '2026-09-01T00:00:00Z') order by code) as paths
+from codes;
 grant select on fixture_catalog to public;
+
+-- The fixture with one node changed, removed or added, by editorial code.
+create function pg_temp.fixture_with(p_code text, p_node jsonb) returns jsonb language sql as $$
+  select coalesce(jsonb_agg(case when e ->> 'editorial_code' = p_code then p_node else e end)
+                    filter (where e ->> 'editorial_code' <> p_code or p_node is not null), '[]'::jsonb)
+  from fixture_catalog, jsonb_array_elements(paths) e
+$$;
+create function pg_temp.fixture_node(p_code text) returns jsonb language sql as $$
+  select e from fixture_catalog, jsonb_array_elements(paths) e where e ->> 'editorial_code' = p_code
+$$;
+grant execute on function pg_temp.fixture_with(text, jsonb) to public;
+grant execute on function pg_temp.fixture_node(text) to public;
 
 -- ---------------------------------------------------------------------------
 -- 1. Structure, grants and function hardening
@@ -70,6 +90,11 @@ insert into tap(line) select extensions.is(
   has_column_privilege('authenticated', 'public.catalog_snapshots', 'source_database_id', 'select'), false,
   'clients cannot read the source database id');
 
+insert into tap(line) select extensions.ok(
+  has_column_privilege('authenticated', 'public.creative_paths', 'editorial_code', 'select')
+  and has_column_privilege('authenticated', 'public.creative_paths', 'selectable', 'select'),
+  'clients can read the editorial code and whether a node is selectable');
+
 insert into tap(line) select extensions.is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname = any(array['save_briefing_revision','import_catalog_snapshot','draw_random_path','select_path','update_concept','set_concept_finalist','update_presentation','begin_generation','complete_analysis','complete_concepts','complete_presentation','fail_generation'])
@@ -99,30 +124,39 @@ insert into tap(line) select extensions.is(
 set local role service_role;
 
 insert into tap(line) select extensions.throws_ok(
-  $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select jsonb_path_query_array(paths, '$[0 to 65]') from fixture_catalog)) $q$,
-  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 66 paths is rejected');
+  $q$ select public.import_catalog_snapshot('base-ficticia', pg_temp.fixture_with('52', null)) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 66 nodes is rejected');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select paths || jsonb_build_array(jsonb_set(jsonb_set(paths -> 0, '{source_page_id}', '"pagina-ficticia-68"'),
-                                                     '{path_number}', '68')) from fixture_catalog)) $q$,
-  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 68 paths is rejected');
+        (select paths from fixture_catalog) || jsonb_build_array(
+          pg_temp.fixture_node('52') || '{"editorial_code":"53","source_page_id":"pagina-ficticia-53"}')) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'a catalog with 68 nodes is rejected');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select jsonb_set(paths, '{66,path_number}', '68') from fixture_catalog)) $q$,
-  '22023', 'TRILHA_INVALID_CATALOG', 'path number 68 is out of range');
+        pg_temp.fixture_with('52', pg_temp.fixture_node('52') || '{"editorial_code":"51"}')) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'duplicate editorial codes are rejected');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select jsonb_set(paths, '{0,path_number}', '0') from fixture_catalog)) $q$,
-  '22023', 'TRILHA_INVALID_CATALOG', 'path number 0 is out of range');
+        pg_temp.fixture_with('52', pg_temp.fixture_node('52') || '{"source_page_id":"pagina-ficticia-51"}')) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'duplicate source page ids are rejected');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.import_catalog_snapshot('base-ficticia',
-        (select jsonb_set(paths, '{66,path_number}', '1') from fixture_catalog)) $q$,
-  '22023', 'TRILHA_INVALID_CATALOG', 'duplicate path numbers are rejected');
+        pg_temp.fixture_with('52', pg_temp.fixture_node('52') || '{"editorial_code":"0"}')) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'an editorial code that is not N or N.M is rejected');
+
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.import_catalog_snapshot('base-ficticia',
+        pg_temp.fixture_with('9.3', pg_temp.fixture_node('9.3') || '{"content":"  ","prompt_text":""}')) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'a selectable path without content or prompt text is rejected');
+
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.import_catalog_snapshot('base-ficticia',
+        pg_temp.fixture_with('52', pg_temp.fixture_node('52') || '{"editorial_code":"5.1"}')) $q$,
+  '22023', 'TRILHA_INVALID_CATALOG', 'a structure with 64 selectable paths is rejected');
 
 select set_config('trilha.snapshot',
   public.import_catalog_snapshot('base-ficticia', (select paths from fixture_catalog))::text, true);
@@ -135,18 +169,37 @@ reset role;
 
 insert into tap(line) select extensions.is(
   (select count(*)::int from public.creative_paths where snapshot_id = current_setting('trilha.snapshot')::uuid),
-  67, 'the snapshot holds exactly 67 paths');
+  67, 'the snapshot holds exactly 67 nodes');
 
 insert into tap(line) select extensions.is(
-  (select array_agg(path_number order by path_number) from public.creative_paths
-    where snapshot_id = current_setting('trilha.snapshot')::uuid),
-  (select array_agg(n) from generate_series(1, 67) n), 'the snapshot holds path numbers 1 to 67, including 67');
+  (select count(*)::int from public.creative_paths
+    where snapshot_id = current_setting('trilha.snapshot')::uuid and selectable),
+  65, 'exactly 65 nodes are selectable');
+
+insert into tap(line) select extensions.results_eq(
+  $q$ select editorial_code, source_page_id, content, prompt_text from public.creative_paths
+      where snapshot_id = current_setting('trilha.snapshot')::uuid and not selectable order by path_number $q$,
+  $q$ values ('9', 'pagina-ficticia-9', '', null::text), ('23', 'pagina-ficticia-23', '', null::text) $q$,
+  'the two group headers import with empty text and are not selectable');
+
+insert into tap(line) select extensions.results_eq(
+  $q$ select editorial_code from public.creative_paths
+      where snapshot_id = current_setting('trilha.snapshot')::uuid order by path_number limit 6 $q$,
+  $q$ values ('1.2'), ('1.3'), ('1.4'), ('1.5'), ('1.6'), ('2') $q$,
+  '1.2-1.6 import without a parent node or 1.1, before 2');
+
+insert into tap(line) select extensions.results_eq(
+  $q$ select editorial_code, path_number from public.creative_paths
+      where snapshot_id = current_setting('trilha.snapshot')::uuid and editorial_code in ('9', '9.1', '9.6', '10', '23.5', '52')
+      order by path_number $q$,
+  $q$ values ('9', 13), ('9.1', 14), ('9.6', 19), ('10', 20), ('23.5', 38), ('52', 67) $q$,
+  'decimal codes are kept verbatim and ordered after their header');
 
 insert into tap(line) select extensions.is(
   (select count(*)::int from public.catalog_snapshots where is_current), 1, 'exactly one snapshot is current');
 
 insert into tap(line) select extensions.throws_ok(
-  $q$ update public.creative_paths set title = 'reescrito' where path_number = 1 $q$,
+  $q$ update public.creative_paths set title = 'reescrito' where editorial_code = '1.2' $q$,
   '42501', null, 'catalog paths cannot be edited, even by a privileged role');
 
 -- A's job with one briefing revision.
@@ -174,6 +227,13 @@ insert into tap(line) select extensions.ok(
   'a random draw comes from the current catalog');
 
 insert into tap(line) select extensions.is(
+  (select count(*)::int from generate_series(1, 300) g
+     cross join lateral public.draw_random_path(current_setting('trilha.job_a')::uuid) d
+     join public.creative_paths p on p.id = d.creative_path_id
+   where not p.selectable),
+  0, 'random draws never return a group header (300 draws)');
+
+insert into tap(line) select extensions.is(
   (select count(*)::int from public.path_selections), 0, 'a draw alone does not create a selection');
 
 insert into tap(line) select extensions.throws_ok(
@@ -194,18 +254,23 @@ insert into tap(line) select extensions.throws_ok(
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.select_path(current_setting('trilha.job_a')::uuid, 'recommended',
-        (select id from public.creative_paths where path_number = 5 and snapshot_id = current_setting('trilha.snapshot')::uuid),
+        (select id from public.creative_paths where editorial_code = '1.6' and snapshot_id = current_setting('trilha.snapshot')::uuid),
         '00000000-0000-4000-8000-000000000999', null) $q$,
   '22023', 'TRILHA_INVALID_SELECTION', 'origin recommended needs a real recommendation');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.select_path(current_setting('trilha.job_a')::uuid, 'manual',
-        (select id from public.creative_paths where path_number = 5 and snapshot_id = current_setting('trilha.snapshot')::uuid),
+        (select id from public.creative_paths where editorial_code = '1.6' and snapshot_id = current_setting('trilha.snapshot')::uuid),
         null, current_setting('trilha.draw')::uuid) $q$,
   '22023', 'TRILHA_INVALID_SELECTION', 'origin manual cannot carry a draw');
 
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.select_path(current_setting('trilha.job_a')::uuid, 'manual',
+        (select id from public.creative_paths where editorial_code = '9' and snapshot_id = current_setting('trilha.snapshot')::uuid)) $q$,
+  '22023', 'TRILHA_PATH_NOT_SELECTABLE', 'a group header cannot be applied, even by its id');
+
 select set_config('trilha.sel_manual', (public.select_path(current_setting('trilha.job_a')::uuid, 'manual',
-  (select id from public.creative_paths where path_number = 7 and snapshot_id = current_setting('trilha.snapshot')::uuid))).id::text, true);
+  (select id from public.creative_paths where editorial_code = '3' and snapshot_id = current_setting('trilha.snapshot')::uuid))).id::text, true);
 
 insert into tap(line) select extensions.is(
   (select origin from public.path_selections where id = current_setting('trilha.sel_manual')::uuid),
@@ -220,7 +285,7 @@ insert into tap(line) select extensions.throws_ok(
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.select_path(current_setting('trilha.job_a')::uuid, 'manual',
-        (select id from public.creative_paths where path_number = 1 and snapshot_id = current_setting('trilha.snapshot')::uuid)) $q$,
+        (select id from public.creative_paths where editorial_code = '1.2' and snapshot_id = current_setting('trilha.snapshot')::uuid)) $q$,
   'P0002', 'TRILHA_JOB_NOT_FOUND', 'B cannot select a path on A''s job');
 
 -- ---------------------------------------------------------------------------
@@ -247,28 +312,33 @@ insert into tap(line) select extensions.results_eq(
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.complete_analysis('00000000-0000-4000-8000-00000000000a', current_setting('trilha.req_analysis')::uuid, 'modelo-servido',
-        '{"resumo":"x"}', '[{"path_number":99,"reasoning":"fora do catálogo"}]') $q$,
+        '{"resumo":"x"}', '[{"path_code":"99","reasoning":"fora do catálogo"}]') $q$,
   '22023', 'TRILHA_INVALID_AI_OUTPUT', 'a recommendation outside the catalog is rejected');
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.complete_analysis('00000000-0000-4000-8000-00000000000a', current_setting('trilha.req_analysis')::uuid, 'modelo-servido',
-        '{"resumo":"x"}', '[{"path_number":3,"reasoning":"a"},{"path_number":3,"reasoning":"b"}]') $q$,
+        '{"resumo":"x"}', '[{"path_code":"23","reasoning":"cabeçalho de grupo"}]') $q$,
+  '22023', 'TRILHA_INVALID_AI_OUTPUT', 'a group header cannot be recommended');
+
+insert into tap(line) select extensions.throws_ok(
+  $q$ select public.complete_analysis('00000000-0000-4000-8000-00000000000a', current_setting('trilha.req_analysis')::uuid, 'modelo-servido',
+        '{"resumo":"x"}', '[{"path_code":"3","reasoning":"a"},{"path_code":"3","reasoning":"b"}]') $q$,
   '22023', 'TRILHA_INVALID_AI_OUTPUT', 'duplicate recommended paths are rejected');
 
 select set_config('trilha.analysis', public.complete_analysis('00000000-0000-4000-8000-00000000000a',
   current_setting('trilha.req_analysis')::uuid, 'modelo-servido', '{"resumo":"Análise fictícia."}',
-  '[{"path_number":3,"reasoning":"Motivo fictício 1."},{"path_number":9,"reasoning":"Motivo fictício 2."},{"path_number":12,"reasoning":"Motivo fictício 3."}]')::text, true);
+  '[{"path_code":"3","reasoning":"Motivo fictício 1."},{"path_code":"9.3","reasoning":"Motivo fictício 2."},{"path_code":"12","reasoning":"Motivo fictício 3."}]')::text, true);
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.complete_analysis('00000000-0000-4000-8000-00000000000a', current_setting('trilha.req_analysis')::uuid, 'modelo-servido',
-        '{"resumo":"x"}', '[{"path_number":1,"reasoning":"a"}]') $q$,
+        '{"resumo":"x"}', '[{"path_code":"1.2","reasoning":"a"}]') $q$,
   '22023', 'TRILHA_REQUEST_NOT_PENDING', 'a completed request cannot be completed again');
 
 reset role;
 insert into tap(line) select extensions.results_eq(
-  $q$ select r.rank, p.path_number from public.path_recommendations r join public.creative_paths p on p.id = r.creative_path_id
+  $q$ select r.rank, p.editorial_code from public.path_recommendations r join public.creative_paths p on p.id = r.creative_path_id
       where r.analysis_id = current_setting('trilha.analysis')::uuid order by r.rank $q$,
-  $q$ values (1, 3), (2, 9), (3, 12) $q$,
+  $q$ values (1, '3'), (2, '9.3'), (3, '12') $q$,
   'recommendations keep their order and point at catalog paths');
 
 insert into tap(line) select extensions.is(
@@ -281,7 +351,7 @@ set local role authenticated;
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.select_path(current_setting('trilha.job_a')::uuid, 'recommended',
-        (select id from public.creative_paths where path_number = 4 and snapshot_id = current_setting('trilha.snapshot')::uuid),
+        (select id from public.creative_paths where editorial_code = '1.5' and snapshot_id = current_setting('trilha.snapshot')::uuid),
         (select id from public.path_recommendations where rank = 2)) $q$,
   '22023', 'TRILHA_INVALID_SELECTION', 'a recommended selection must use the recommended path');
 
@@ -470,6 +540,25 @@ insert into tap(line) select extensions.throws_ok(
   $q$ update public.generation_requests set status = 'pending', completed_at = null, error_code = null
       where id = current_setting('trilha.req_c1')::uuid $q$,
   '42501', null, 'a finished request cannot go back to pending');
+
+-- Defense in depth: even a selection that points at a group header (only
+-- possible by writing the table directly) cannot start concept generation.
+insert into public.path_selections (job_id, origin, creative_path_id, briefing_revision_id, selected_by)
+select current_setting('trilha.job_a')::uuid, 'manual', p.id,
+       (select id from public.briefing_revisions where job_id = current_setting('trilha.job_a')::uuid order by revision_number desc limit 1),
+       '00000000-0000-4000-8000-00000000000a'
+from public.creative_paths p
+where p.editorial_code = '23' and p.snapshot_id = current_setting('trilha.snapshot')::uuid;
+select set_config('trilha.sel_header',
+  (select id::text from public.path_selections order by choice_order desc limit 1), true);
+
+set local role service_role;
+insert into tap(line) select extensions.throws_ok(
+  $q$ select * from public.begin_generation('00000000-0000-4000-8000-00000000000a', current_setting('trilha.job_a')::uuid,
+        'concepts', 'modelo-teste', 'v1',
+        current_setting('trilha.sel_header')::uuid) $q$,
+  '22023', 'TRILHA_PATH_NOT_SELECTABLE', 'concepts cannot be generated from a group header');
+reset role;
 
 -- ---------------------------------------------------------------------------
 -- Result
