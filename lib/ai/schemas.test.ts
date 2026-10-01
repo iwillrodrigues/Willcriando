@@ -8,9 +8,15 @@ import {
   toPresentationContent,
 } from "./schemas";
 
-const catalog = new Set(Array.from({ length: 67 }, (_, i) => i + 1));
+// Selectable codes of the approved shape: 9 and 23 are group headers.
+const catalog = new Set([
+  ...[2, 3, 4, 5, 6].map((m) => `1.${m}`),
+  ...Array.from({ length: 51 }, (_, i) => String(i + 2)).filter((c) => c !== "9" && c !== "23"),
+  ...[1, 2, 3, 4, 5, 6].map((m) => `9.${m}`),
+  ...[1, 2, 3, 4, 5].map((m) => `23.${m}`),
+]);
 
-const analysis = (recs: { path_number: number; reasoning: string }[]) => ({
+const analysis = (recs: { path_code: string; reasoning: string }[]) => ({
   summary: "Resumo fictício.",
   challenge: "Desafio fictício.",
   audience: "Público fictício.",
@@ -24,37 +30,48 @@ const analysis = (recs: { path_number: number; reasoning: string }[]) => ({
 describe("analysis output", () => {
   it("accepts three distinct catalog paths", () => {
     const value = analysis([
-      { path_number: 1, reasoning: "a" },
-      { path_number: 2, reasoning: "b" },
-      { path_number: 67, reasoning: "c" },
+      { path_code: "1.2", reasoning: "a" },
+      { path_code: "9.3", reasoning: "b" },
+      { path_code: "23.5", reasoning: "c" },
     ]);
     expect(analysisStrictSchema(catalog).safeParse(value).success).toBe(true);
   });
 
+  it("rejects a group header and a code that is not in the catalog", () => {
+    for (const code of ["9", "23", "1.1", "1"]) {
+      const value = analysis([
+        { path_code: "1.2", reasoning: "a" },
+        { path_code: "9.3", reasoning: "b" },
+        { path_code: code, reasoning: "c" },
+      ]);
+      expect(analysisStrictSchema(catalog).safeParse(value).success).toBe(false);
+    }
+  });
+
   it("rejects a path that is not in the catalog", () => {
     const value = analysis([
-      { path_number: 1, reasoning: "a" },
-      { path_number: 2, reasoning: "b" },
-      { path_number: 68, reasoning: "c" },
+      { path_code: "1.2", reasoning: "a" },
+      { path_code: "9.3", reasoning: "b" },
+      { path_code: "53", reasoning: "c" },
     ]);
     expect(analysisStrictSchema(catalog).safeParse(value).success).toBe(false);
   });
 
   it("rejects repeated paths and the wrong number of recommendations", () => {
     const repeated = analysis([
-      { path_number: 5, reasoning: "a" },
-      { path_number: 5, reasoning: "b" },
-      { path_number: 6, reasoning: "c" },
+      { path_code: "5", reasoning: "a" },
+      { path_code: "5", reasoning: "b" },
+      { path_code: "6", reasoning: "c" },
     ]);
     expect(analysisStrictSchema(catalog).safeParse(repeated).success).toBe(false);
-    expect(analysisStrictSchema(catalog).safeParse(analysis([{ path_number: 1, reasoning: "a" }])).success).toBe(false);
+    expect(analysisStrictSchema(catalog).safeParse(analysis([{ path_code: "1.2", reasoning: "a" }])).success).toBe(false);
   });
 
   it("rejects blank interpretation fields", () => {
     const value = { ...analysis([
-      { path_number: 1, reasoning: "a" },
-      { path_number: 2, reasoning: "b" },
-      { path_number: 3, reasoning: "c" },
+      { path_code: "1.2", reasoning: "a" },
+      { path_code: "9.3", reasoning: "b" },
+      { path_code: "3", reasoning: "c" },
     ]), tension: "   " };
     expect(analysisStrictSchema(catalog).safeParse(value).success).toBe(false);
   });

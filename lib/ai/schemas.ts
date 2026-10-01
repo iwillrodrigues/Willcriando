@@ -26,7 +26,7 @@ export const analysisWireSchema = z.object({
   human_truth: z.string(),
   constraints: z.array(z.string()),
   open_questions: z.array(z.string()),
-  recommendations: z.array(z.object({ path_number: z.number().int(), reasoning: z.string() })),
+  recommendations: z.array(z.object({ path_code: z.string(), reasoning: z.string() })),
 });
 
 const analysisStrictBase = z.object({
@@ -38,24 +38,24 @@ const analysisStrictBase = z.object({
   constraints: z.array(text(400)).max(10),
   open_questions: z.array(text(400)).max(10),
   recommendations: z
-    .array(z.object({ path_number: z.number().int(), reasoning: text(600) }))
+    .array(z.object({ path_code: z.string().trim(), reasoning: text(600) }))
     .length(RECOMMENDATION_COUNT),
 });
 
 export type AnalysisOutput = z.infer<typeof analysisStrictBase>;
 
-/** Strict check, including that every recommended number exists in the catalog. */
-export function analysisStrictSchema(catalogNumbers: ReadonlySet<number>) {
+/** Strict check, including that every recommended code is a selectable path of the catalog. */
+export function analysisStrictSchema(selectableCodes: ReadonlySet<string>) {
   return analysisStrictBase.superRefine((value, ctx) => {
-    const seen = new Set<number>();
+    const seen = new Set<string>();
     value.recommendations.forEach((rec, index) => {
-      if (!catalogNumbers.has(rec.path_number)) {
+      if (!selectableCodes.has(rec.path_code)) {
         ctx.addIssue({ code: "custom", message: "Recommended path is not in the catalog.", path: ["recommendations", index] });
       }
-      if (seen.has(rec.path_number)) {
+      if (seen.has(rec.path_code)) {
         ctx.addIssue({ code: "custom", message: "Recommended path repeated.", path: ["recommendations", index] });
       }
-      seen.add(rec.path_number);
+      seen.add(rec.path_code);
     });
   });
 }

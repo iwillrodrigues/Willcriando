@@ -275,6 +275,11 @@
   background: var(--bg);
 }
 
+/* A subpath ("9.3") under its group. */
+.itemChild {
+  margin-left: 1.5rem;
+}
+
 .item h3 {
   font-size: 15px;
   margin: 0;

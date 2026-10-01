@@ -8,13 +8,13 @@
  */
 
 export const PROMPT_VERSIONS = {
-  analysis: "analysis-2026-09-30.1",
-  concepts: "concepts-2026-09-30.1",
+  analysis: "analysis-2026-10-01.1",
+  concepts: "concepts-2026-10-01.1",
   presentation: "presentation-2026-09-30.1",
 } as const;
 
 export type CatalogPathForPrompt = {
-  path_number: number;
+  editorial_code: string;
   title: string;
   section: string | null;
   content: string;
@@ -32,7 +32,7 @@ function catalogBlock(paths: readonly CatalogPathForPrompt[]): string {
   return paths
     .map((p) =>
       [
-        `<caminho numero="${p.path_number}">`,
+        `<caminho codigo="${p.editorial_code}">`,
         `Título: ${p.title}`,
         p.section ? `Seção: ${p.section}` : null,
         p.content ? `Conteúdo:\n${p.content}` : null,
@@ -60,7 +60,7 @@ export function analysisPrompt(briefing: string, catalog: readonly CatalogPathFo
     "open_questions: o que falta no briefing para decidir bem. Lista vazia se nada faltar.",
     "",
     `recommendations: exatamente 3 caminhos DIFERENTES do catálogo abaixo, do mais para o menos adequado.`,
-    "Use apenas números que existem no catálogo. Em reasoning, até 2 frases ligando o caminho a este briefing.",
+    "Em path_code, use exatamente o código de um caminho do catálogo, como aparece no atributo codigo. Em reasoning, até 2 frases ligando o caminho a este briefing.",
     "As recomendações são sugestões. Quem escolhe o caminho é a pessoa criativa.",
     "",
     "Catálogo editorial (não reescreva, apenas consulte):",
@@ -117,7 +117,7 @@ export function conceptsPrompt(input: {
     analysis,
     "",
     `Caminho escolhido (conteúdo editorial, use como método):`,
-    `<caminho numero="${input.path.path_number}">`,
+    `<caminho codigo="${input.path.editorial_code}">`,
     `Título: ${input.path.title}`,
     input.path.section ? `Seção: ${input.path.section}` : null,
     input.path.content ? `Conteúdo:\n${input.path.content}` : null,

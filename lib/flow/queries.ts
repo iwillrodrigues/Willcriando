@@ -14,9 +14,16 @@ import { jobIdSchema } from "@/lib/validation";
 export type SelectionOrigin = "recommended" | "manual" | "random";
 export type GenerationStatus = "pending" | "succeeded" | "failed";
 
+/**
+ * A catalog node. editorial_code is the visible code ("9.3"); path_number is
+ * only the internal order. Group headers (selectable false) are shown for
+ * orientation but never recommended, drawn or applied.
+ */
 export type CatalogPath = {
   id: string;
   path_number: number;
+  editorial_code: string;
+  selectable: boolean;
   title: string;
   section: string | null;
   content: string;
@@ -25,7 +32,7 @@ export type CatalogPath = {
 
 export type Catalog = { snapshotId: string; importedAt: string; paths: CatalogPath[] } | null;
 
-const PATH_COLUMNS = "id, path_number, title, section, content, prompt_text";
+const PATH_COLUMNS = "id, path_number, editorial_code, selectable, title, section, content, prompt_text";
 
 export async function getCurrentCatalog(): Promise<Catalog> {
   const supabase = await createSupabaseServerClient();

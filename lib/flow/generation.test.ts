@@ -23,12 +23,21 @@ vi.mock("@/lib/ai/client", async () => {
   return { AiError, aiModel: () => aiModel(), generateStructured: (...a: unknown[]) => generateStructured(...a) };
 });
 
-const catalogPaths = Array.from({ length: 67 }, (_, i) => ({
-  id: `path-${i + 1}`,
+// Fictitious catalog with the approved shape: 9 and 23 are empty group headers.
+const codes = [
+  ...[2, 3, 4, 5, 6].map((m) => `1.${m}`),
+  ...Array.from({ length: 51 }, (_, i) => String(i + 2)),
+  ...[1, 2, 3, 4, 5, 6].map((m) => `9.${m}`),
+  ...[1, 2, 3, 4, 5].map((m) => `23.${m}`),
+];
+const catalogPaths = codes.map((code, i) => ({
+  id: `path-${code}`,
   path_number: i + 1,
-  title: `Caminho fictício ${i + 1}`,
+  editorial_code: code,
+  selectable: code !== "9" && code !== "23",
+  title: `Caminho fictício ${code}`,
   section: null,
-  content: "texto fictício",
+  content: code === "9" || code === "23" ? "" : "texto fictício",
   prompt_text: null,
 }));
 
@@ -120,10 +129,27 @@ describe("runGeneration", () => {
         human_truth: "h",
         constraints: [],
         open_questions: [],
-        recommendations: [{ path_number: 1, reasoning: "r" }],
+        recommendations: [{ path_code: "1.2", reasoning: "r" }],
       },
     });
     await expect(runGeneration(input)).resolves.toEqual({ status: "succeeded", reused: false });
+
+    // Group headers never reach the model or the accepted codes.
+    const call = generateStructured.mock.calls[0][0] as {
+      system: string;
+      strict: { safeParse: (v: unknown) => { success: boolean } };
+    };
+    expect(call.system).toContain('<caminho codigo="9.3">');
+    expect(call.system).toContain('<caminho codigo="1.2">');
+    expect(call.system).not.toContain('<caminho codigo="9">');
+    expect(call.system).not.toContain('<caminho codigo="23">');
+    const output = (code: string) => ({
+      summary: "s", challenge: "c", audience: "a", tension: "t", human_truth: "h", constraints: [], open_questions: [],
+      recommendations: [{ path_code: "1.2", reasoning: "r" }, { path_code: "9.3", reasoning: "r" }, { path_code: code, reasoning: "r" }],
+    });
+    expect(call.strict.safeParse(output("23.5")).success).toBe(true);
+    expect(call.strict.safeParse(output("9")).success).toBe(false);
+    expect(call.strict.safeParse(output("23")).success).toBe(false);
     expect(rpc).toHaveBeenCalledWith("begin_generation", expect.objectContaining({ p_user_id: "user-a", p_job_id: "job-a", p_kind: "analysis" }));
     expect(rpc).toHaveBeenCalledWith(
       "complete_analysis",

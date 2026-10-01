@@ -130,13 +130,15 @@ async function runAnalysis(admin: Admin, userId: string, jobId: string, begin: B
   const catalog = await getCurrentCatalog();
   if (!catalog || catalog.snapshotId !== begin.payload.catalog_snapshot_id) throw new DbError("TRILHA_CATALOG_CHANGED");
 
-  const prompt = analysisPrompt(briefing, catalog.paths);
+  // Group headers are never recommended, so the model never sees them as options.
+  const selectable = catalog.paths.filter((p) => p.selectable);
+  const prompt = analysisPrompt(briefing, selectable);
   const result = await generateStructured({
     model,
     system: prompt.system,
     user: prompt.user,
     wire: analysisWireSchema,
-    strict: analysisStrictSchema(new Set(catalog.paths.map((p) => p.path_number))),
+    strict: analysisStrictSchema(new Set(selectable.map((p) => p.editorial_code))),
   });
   const { recommendations, ...output } = result.value;
   const { error } = await admin.rpc("complete_analysis", {
@@ -153,7 +155,7 @@ async function runConcepts(admin: Admin, userId: string, jobId: string, begin: B
   const supabase = await createSupabaseServerClient();
   const { data: sel, error } = await supabase
     .from("path_selections")
-    .select("id, creative_paths (id, path_number, title, section, content, prompt_text)")
+    .select("id, creative_paths (id, path_number, editorial_code, selectable, title, section, content, prompt_text)")
     .eq("id", begin.payload.selection_id ?? "")
     .eq("job_id", jobId)
     .single();

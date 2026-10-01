@@ -83,7 +83,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
           <p className={styles.muted}>Salve o briefing para analisar.</p>
         ) : !catalog ? (
           <p className={styles.notice}>
-            O catálogo de 67 caminhos ainda não foi importado neste ambiente. A análise e as recomendações ficam disponíveis depois da importação.
+            O catálogo de 65 caminhos ainda não foi importado neste ambiente. A análise e as recomendações ficam disponíveis depois da importação.
           </p>
         ) : analysis ? (
           <>
@@ -123,7 +123,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
               {analysis.recommendations.map((rec) => (
                 <div key={rec.id} className={`${styles.item} ${selection?.recommendation_id === rec.id ? styles.itemActive : ""}`}>
                   <div className={styles.row}>
-                    <span className={`${styles.badge} ${styles.badgeEditorial}`}>Caminho {rec.path.path_number}</span>
+                    <span className={`${styles.badge} ${styles.badgeEditorial}`}>Caminho {rec.path.editorial_code}</span>
                     <h3>{rec.path.title}</h3>
                   </div>
                   <p className={styles.prose}>
@@ -166,7 +166,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         {selection ? (
           <div className={`${styles.item} ${styles.itemActive}`}>
             <div className={styles.row}>
-              <span className={`${styles.badge} ${styles.badgeEditorial}`}>Caminho {selection.path.path_number}</span>
+              <span className={`${styles.badge} ${styles.badgeEditorial}`}>Caminho {selection.path.editorial_code}</span>
               <h3>{selection.path.title}</h3>
             </div>
             <p className={styles.muted}>
@@ -184,7 +184,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         )}
         <div className={styles.row}>
           <Link className={styles.link} href={`/jobs/${job.id}/caminhos`}>
-            Explorar os {catalog?.paths.length ?? 67} caminhos, escolher ou sortear →
+            Explorar os {catalog?.paths.filter((p) => p.selectable).length ?? 65} caminhos, escolher ou sortear →
           </Link>
         </div>
       </section>
@@ -198,7 +198,7 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         ) : (
           <>
             <details className={styles.details}>
-              <summary>O que será aplicado: revisão {selection.revision_number} do briefing + caminho {selection.path.path_number}</summary>
+              <summary>O que será aplicado: revisão {selection.revision_number} do briefing + caminho {selection.path.editorial_code}</summary>
               <div className={styles.stack}>
                 <span className={`${styles.badge} ${styles.badgeEditorial}`}>Conteúdo editorial do catálogo</span>
                 {selection.path.section && <p className={styles.muted}>Seção: {selection.path.section}</p>}

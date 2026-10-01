@@ -36,6 +36,7 @@ const DB_MESSAGES: Record<string, string> = {
   TRILHA_CATALOG_EMPTY: "O catálogo de caminhos ainda não foi importado.",
   TRILHA_CATALOG_CHANGED: "O catálogo foi atualizado. Tente de novo.",
   TRILHA_PATH_NOT_FOUND: "Caminho não encontrado no catálogo atual.",
+  TRILHA_PATH_NOT_SELECTABLE: "Este item agrupa caminhos e não pode ser aplicado. Escolha um dos caminhos do grupo.",
   TRILHA_INVALID_SELECTION: "Esta escolha não vale mais. Recarregue a página e escolha de novo.",
   TRILHA_SELECTION_NOT_ACTIVE: "O caminho ativo mudou. Recarregue a página.",
   TRILHA_NO_FINALISTS: "Marque pelo menos um conceito como finalista.",

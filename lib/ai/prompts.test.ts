@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { analysisPrompt, conceptsPrompt, presentationPrompt, PROMPT_VERSIONS } from "./prompts";
 
-const path = (n: number) => ({
-  path_number: n,
+const path = (n: number | string) => ({
+  editorial_code: String(n),
   title: `Caminho fictício ${n}`,
   section: "Seção fictícia",
   content: `Texto editorial fictício ${n}\ncom quebra de linha.`,
@@ -16,10 +16,10 @@ describe("prompts", () => {
   });
 
   it("lists every catalog path in the analysis prompt, verbatim", () => {
-    const catalog = Array.from({ length: 67 }, (_, i) => path(i + 1));
+    const catalog = [path("1.2"), path(2), path("9.3"), path("23.5"), path(52)];
     const { system, user } = analysisPrompt("Briefing fictício.", catalog);
     for (const p of catalog) {
-      expect(system).toContain(`<caminho numero="${p.path_number}">`);
+      expect(system).toContain(`<caminho codigo="${p.editorial_code}">`);
       expect(system).toContain(p.content);
     }
     expect(user).toContain("Briefing fictício.");
@@ -27,8 +27,9 @@ describe("prompts", () => {
   });
 
   it("passes the exact path content and instruction when applying a path", () => {
-    const p = path(7);
+    const p = path("9.3");
     const { user } = conceptsPrompt({ briefing: "Briefing fictício.", path: p, analysis: null });
+    expect(user).toContain('<caminho codigo="9.3">');
     expect(user).toContain(p.content);
     expect(user).toContain(p.prompt_text);
     expect(user).toContain("Briefing fictício.");

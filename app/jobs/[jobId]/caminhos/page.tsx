@@ -41,11 +41,9 @@ export default async function PathsPage(props: PageProps<"/jobs/[jobId]/caminhos
   const active = flow.selection;
   const hasBriefing = flow.job.currentRevision != null;
 
-  const sections = new Map<string, CatalogPath[]>();
-  for (const path of catalog?.paths ?? []) {
-    const key = path.section ?? "Sem seção";
-    sections.set(key, [...(sections.get(key) ?? []), path]);
-  }
+  // Catalog order already places each group header before its paths.
+  const nodes = catalog?.paths ?? [];
+  const selectableCount = nodes.filter((p) => p.selectable).length;
 
   return (
     <main className={styles.page}>
@@ -61,13 +59,13 @@ export default async function PathsPage(props: PageProps<"/jobs/[jobId]/caminhos
       </p>
 
       {!catalog ? (
-        <p className={styles.notice}>O catálogo de 67 caminhos ainda não foi importado neste ambiente.</p>
+        <p className={styles.notice}>O catálogo de 65 caminhos ainda não foi importado neste ambiente.</p>
       ) : (
         <>
           {!hasBriefing && <p className={styles.notice}>Salve o briefing do job antes de escolher um caminho.</p>}
           {active && (
             <p className={styles.muted}>
-              Ativo: caminho {active.path.path_number}, {active.path.title} ·{" "}
+              Ativo: caminho {active.path.editorial_code}, {active.path.title} ·{" "}
               <span className={`${styles.badge} ${styles.badgeUser}`}>{ORIGIN_LABEL[active.origin]}</span>
             </p>
           )}
@@ -83,7 +81,7 @@ export default async function PathsPage(props: PageProps<"/jobs/[jobId]/caminhos
             {draw && !draw.confirmed && (
               <div className={`${styles.item} ${styles.itemActive}`}>
                 <div className={styles.row}>
-                  <span className={`${styles.badge} ${styles.badgeEditorial}`}>Caminho {draw.path.path_number}</span>
+                  <span className={`${styles.badge} ${styles.badgeEditorial}`}>Caminho {draw.path.editorial_code}</span>
                   <h3>{draw.path.title}</h3>
                 </div>
                 {draw.path.section && <p className={styles.muted}>Seção: {draw.path.section}</p>}
@@ -107,14 +105,16 @@ export default async function PathsPage(props: PageProps<"/jobs/[jobId]/caminhos
           </section>
 
           <section className={styles.card} aria-labelledby="catalogo">
-            <h2 id="catalogo">Explorar os {catalog.paths.length} caminhos</h2>
-            {[...sections.entries()].map(([section, paths]) => (
-              <div key={section} className={styles.stack}>
-                <h3 className={styles.sectionTitle}>{section}</h3>
-                {paths.map((path) => (
-                  <details key={path.id} className={`${styles.item} ${active?.path.id === path.id ? styles.itemActive : ""}`}>
+            <h2 id="catalogo">Explorar os {selectableCount} caminhos</h2>
+            <div className={styles.stack}>
+              {nodes.map((path) =>
+                path.selectable ? (
+                  <details
+                    key={path.id}
+                    className={`${styles.item} ${path.editorial_code.includes(".") ? styles.itemChild : ""} ${active?.path.id === path.id ? styles.itemActive : ""}`}
+                  >
                     <summary>
-                      {path.path_number}. {path.title}
+                      {path.editorial_code}. {path.title}
                       {active?.path.id === path.id ? " · ativo" : ""}
                     </summary>
                     <PathBody path={path} />
@@ -122,9 +122,13 @@ export default async function PathsPage(props: PageProps<"/jobs/[jobId]/caminhos
                       <SelectPathForm jobId={jobId} origin="manual" pathId={path.id} label="Escolher este caminho" secondary />
                     )}
                   </details>
-                ))}
-              </div>
-            ))}
+                ) : (
+                  <h3 key={path.id} className={styles.sectionTitle}>
+                    {path.editorial_code}. {path.title} <span className={styles.muted}>· escolha um dos caminhos abaixo</span>
+                  </h3>
+                ),
+              )}
+            </div>
           </section>
         </>
       )}
