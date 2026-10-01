@@ -50,3 +50,28 @@
   margin: 0;
   color: var(--text-2);
 }
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+
+.primary,
+.secondary {
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 10px 16px;
+  text-decoration: none;
+}
+
+.primary {
+  color: #fff;
+  background: var(--accent);
+}
+
+.secondary {
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}

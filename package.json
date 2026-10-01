@@ -13,9 +13,13 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "check": "npm run lint && npm run typecheck && npm run test:run && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test:run && npm run build",
+    "catalog:import": "node scripts/import-catalog.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.130.0",
+    "@supabase/ssr": "0.12.7",
+    "@supabase/supabase-js": "2.117.2",
     "next": "16.3.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",

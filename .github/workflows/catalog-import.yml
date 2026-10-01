@@ -1,0 +1,194 @@
+name: Catalog import (willcriando dev)
+
+# Manual only. Imports the 67-node editorial catalog from Notion into the
+# Supabase development project willcriando (ref anhaonrifwakoekksopv) with the
+# repository importer, then imports again to prove idempotency.
+#
+# Secrets (repository or "willcriando-dev" environment): NOTION_API_KEY,
+# NOTION_CREATIVE_PATHS_DATABASE_ID, NEXT_PUBLIC_SUPABASE_URL,
+# SUPABASE_SERVICE_ROLE_KEY. Each step receives only the secrets it uses, and
+# none is ever printed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit SHA to import from (empty: the commit of the branch selected above)"
+        required: false
+        default: ""
+      confirm_project_ref:
+        description: "Type the target project ref (anhaonrifwakoekksopv) to allow the write"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-import-anhaonrifwakoekksopv
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PROJECT_REF: anhaonrifwakoekksopv
+  NOTION_PROP_PROMPT: "Texto (prompt)"
+  NOTION_PROP_CONTENT: body
+  NODE_USE_ENV_PROXY: "1"
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: willcriando-dev
+    steps:
+      - name: Confirm target
+        env:
+          CONFIRM: ${{ inputs.confirm_project_ref }}
+        run: |
+          if [ "$CONFIRM" != "$EXPECTED_PROJECT_REF" ]; then
+            echo "::error title=Not confirmed::confirm_project_ref must be exactly $EXPECTED_PROJECT_REF."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies from the lockfile
+        run: npm ci --ignore-scripts
+
+      - name: Check secrets and Supabase target
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_CREATIVE_PATHS_DATABASE_ID: ${{ secrets.NOTION_CREATIVE_PATHS_DATABASE_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          missing=0
+          for name in NOTION_API_KEY NOTION_CREATIVE_PATHS_DATABASE_ID NEXT_PUBLIC_SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; do
+            if [ -z "${!name//[[:space:]]/}" ]; then
+              echo "::error title=Missing secret::$name is not set."
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          # Exactly https://<ref>.supabase.co, no other host, port or path. Prints nothing from the value.
+          # shellcheck disable=SC2016 # JavaScript, not shell expansion
+          node -e '
+            const raw = process.env.NEXT_PUBLIC_SUPABASE_URL.trim();
+            let u;
+            try { u = new URL(raw); } catch { u = null; }
+            const ok = u && u.protocol === "https:" && u.hostname === `${process.env.EXPECTED_PROJECT_REF}.supabase.co`
+              && u.port === "" && u.username === "" && u.password === "" && (u.pathname === "/" || u.pathname === "")
+              && u.search === "" && u.hash === "";
+            if (!ok) { console.log("::error title=Wrong target::NEXT_PUBLIC_SUPABASE_URL is not https://" + process.env.EXPECTED_PROJECT_REF + ".supabase.co"); process.exit(1); }
+          '
+          echo "All secrets present; Supabase target is $EXPECTED_PROJECT_REF."
+
+      - name: Validate Notion catalog (read-only)
+        id: validate
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_CREATIVE_PATHS_DATABASE_ID: ${{ secrets.NOTION_CREATIVE_PATHS_DATABASE_ID }}
+        run: bash .github/scripts/catalog-import-run.sh dry-run validation
+
+      - name: Import catalog (first run)
+        id: first
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_CREATIVE_PATHS_DATABASE_ID: ${{ secrets.NOTION_CREATIVE_PATHS_DATABASE_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: bash .github/scripts/catalog-import-run.sh apply first-import
+
+      # The catalog tables grant nothing to service_role, so the remote result is
+      # what import_catalog_snapshot accepted: it re-checks 67 nodes, 65
+      # selectable with text, unique source ids and codes, and the table
+      # constraints (path_count = 67, unique per snapshot) back it.
+      - name: Check first import
+        env:
+          VALIDATION_MAPPING: ${{ steps.validate.outputs.mapping }}
+          FIRST_MAPPING: ${{ steps.first.outputs.mapping }}
+        run: |
+          if [ "$VALIDATION_MAPPING" != "$FIRST_MAPPING" ]; then
+            echo "::error title=Source changed::The Notion mapping changed between validation and import."
+            exit 1
+          fi
+          echo "First import accepted by the database with the validated mapping."
+
+      - name: Import catalog (second run, idempotency)
+        id: second
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_CREATIVE_PATHS_DATABASE_ID: ${{ secrets.NOTION_CREATIVE_PATHS_DATABASE_ID }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: bash .github/scripts/catalog-import-run.sh apply second-import
+
+      # Same snapshot id: the content hash, which covers every node's code and
+      # source id, matched the first import, so no new snapshot or rows were written.
+      - name: Check idempotency
+        env:
+          FIRST_SNAPSHOT: ${{ steps.first.outputs.snapshot }}
+          SECOND_SNAPSHOT: ${{ steps.second.outputs.snapshot }}
+          FIRST_MAPPING: ${{ steps.first.outputs.mapping }}
+          SECOND_MAPPING: ${{ steps.second.outputs.mapping }}
+        run: |
+          if [ -z "$FIRST_SNAPSHOT" ] || [ "$FIRST_SNAPSHOT" != "$SECOND_SNAPSHOT" ]; then
+            echo "::error title=Not idempotent::The second import returned a different catalog snapshot."
+            exit 1
+          fi
+          if [ "$FIRST_MAPPING" != "$SECOND_MAPPING" ]; then
+            echo "::error title=Source changed::The Notion mapping changed between the two imports."
+            exit 1
+          fi
+          echo "Idempotent: same snapshot, same mapping."
+
+      - name: Summary
+        if: always()
+        env:
+          COMMIT: ${{ inputs.ref || github.sha }}
+          JOB_STATUS: ${{ job.status }}
+          V_NODES: ${{ steps.validate.outputs.nodes }}
+          V_PATHS: ${{ steps.validate.outputs.paths }}
+          V_HEADERS: ${{ steps.validate.outputs.headers }}
+          V_CODES: ${{ steps.validate.outputs.unique_codes }}
+          V_IDS: ${{ steps.validate.outputs.unique_ids }}
+          F_NODES: ${{ steps.first.outputs.nodes }}
+          F_PATHS: ${{ steps.first.outputs.paths }}
+          F_HEADERS: ${{ steps.first.outputs.headers }}
+          S_NODES: ${{ steps.second.outputs.nodes }}
+          S_PATHS: ${{ steps.second.outputs.paths }}
+          S_HEADERS: ${{ steps.second.outputs.headers }}
+          F_SNAPSHOT: ${{ steps.first.outputs.snapshot }}
+          S_SNAPSHOT: ${{ steps.second.outputs.snapshot }}
+          V_MAPPING: ${{ steps.validate.outputs.mapping }}
+          S_MAPPING: ${{ steps.second.outputs.mapping }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          FIRST_OUTCOME: ${{ steps.first.outcome }}
+          SECOND_OUTCOME: ${{ steps.second.outcome }}
+        run: |
+          v() { echo "${1:-n/a}"; }
+          {
+            echo "## Catalog import: $JOB_STATUS"
+            echo
+            echo "Target: \`$EXPECTED_PROJECT_REF\` (willcriando, development). Commit: \`$COMMIT\`."
+            echo
+            echo "| Step | Outcome | Nodes | Selectable | Headers |"
+            echo "|---|---|---|---|---|"
+            echo "| Notion validation (read-only) | $(v "$VALIDATE_OUTCOME") | $(v "$V_NODES") | $(v "$V_PATHS") | $(v "$V_HEADERS") |"
+            echo "| First import | $(v "$FIRST_OUTCOME") | $(v "$F_NODES") | $(v "$F_PATHS") | $(v "$F_HEADERS") |"
+            echo "| Second import | $(v "$SECOND_OUTCOME") | $(v "$S_NODES") | $(v "$S_PATHS") | $(v "$S_HEADERS") |"
+            echo
+            echo "Unique editorial codes: $(v "$V_CODES"). Unique source ids: $(v "$V_IDS")."
+            echo "Snapshot: first \`$(v "$F_SNAPSHOT")\`, second \`$(v "$S_SNAPSHOT")\`."
+            echo "Mapping fingerprint: validation \`$(v "$V_MAPPING")\`, second import \`$(v "$S_MAPPING")\`."
+            if [ "$JOB_STATUS" != "success" ]; then
+              echo
+              echo "**Blocked.** See the error annotations of the first failed step. Validation failures stop the job before any write."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
