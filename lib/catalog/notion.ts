@@ -285,3 +285,24 @@ export function describeCatalog(records: readonly CatalogRecord[]) {
     withContent: records.filter((r) => r.content).length,
   };
 }
+
+/**
+ * Request headers for the Notion API. Authorization is sent only when a local
+ * token exists; without one, a cloud environment may inject its own.
+ */
+export function notionHeaders(token: string | undefined, notionVersion: string): Record<string, string> {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "Notion-Version": notionVersion,
+    "Content-Type": "application/json",
+  };
+}
+
+/** Failure message with the status, Notion's error code and a redacted path; never headers. */
+export function notionFailureMessage(status: number, code: string, path: string): string {
+  const where = path.split("?")[0].replace(/[0-9a-f-]{32,36}/g, "<id>");
+  const message = `Notion request failed: HTTP ${status} (${code}) on ${where}`;
+  return status === 401
+    ? `${message}. No usable Notion credential was available: set NOTION_API_KEY or attach the Notion connection to the environment.`
+    : message;
+}

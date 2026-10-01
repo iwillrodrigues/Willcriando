@@ -5,7 +5,8 @@
  *   node scripts/import-catalog.ts             fetch, map and validate (dry run)
  *   node scripts/import-catalog.ts --apply     validate, then store a snapshot
  *
- * Backend-only. Reads NOTION_API_KEY, NOTION_CREATIVE_PATHS_DATABASE_ID and,
+ * Backend-only. Reads NOTION_API_KEY (optional where the environment injects
+ * the Notion credential), NOTION_CREATIVE_PATHS_DATABASE_ID and,
  * for --apply, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the
  * environment. It never prints a secret or any editorial content; the log
  * holds counts, property names and problems only.
@@ -27,6 +28,8 @@ import {
   describeCatalog,
   detectMapping,
   mapPage,
+  notionFailureMessage,
+  notionHeaders,
   unsupportedBlockTypes,
   validateCatalog,
   type CatalogRecord,
@@ -48,18 +51,15 @@ function requireEnv(name: string): string {
   return value;
 }
 
-const token = requireEnv("NOTION_API_KEY");
+// Optional: without it, the cloud environment's injected credential is used.
+const token = process.env.NOTION_API_KEY?.trim() || undefined;
 const databaseId = requireEnv("NOTION_CREATIVE_PATHS_DATABASE_ID");
 const notionVersion = process.env.NOTION_API_VERSION?.trim() || "2022-06-28";
 
 async function notion<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const response = await fetch(`https://api.notion.com/v1/${path}`, {
     method: init?.method ?? "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Notion-Version": notionVersion,
-      "Content-Type": "application/json",
-    },
+    headers: notionHeaders(token, notionVersion),
     body: init?.body ? JSON.stringify(init.body) : undefined,
   });
   if (!response.ok) {
@@ -68,7 +68,7 @@ async function notion<T>(path: string, init?: { method?: string; body?: unknown 
     try {
       code = ((await response.json()) as { code?: string }).code ?? code;
     } catch {}
-    throw new Error(`Notion request failed: HTTP ${response.status} (${code}) on ${path.split("?")[0].replace(/[0-9a-f-]{32,36}/g, "<id>")}`);
+    throw new Error(notionFailureMessage(response.status, code, path));
   }
   return (await response.json()) as T;
 }

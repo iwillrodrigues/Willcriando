@@ -5,6 +5,8 @@ import {
   CatalogDiscrepancy,
   detectMapping,
   mapPage,
+  notionFailureMessage,
+  notionHeaders,
   validateCatalog,
   type CatalogRecord,
   type NotionPage,
@@ -136,5 +138,36 @@ describe("blocksToText", () => {
       { id: "4", type: "divider" },
     ]);
     expect(text).toBe("Título\nPrimeiro.\nItem.");
+  });
+});
+
+describe("Notion request auth", () => {
+  // Fictitious token, never a real credential.
+  it("adds Authorization when a local token exists", () => {
+    const h = notionHeaders("fake-token", "2022-06-28");
+    expect(h.Authorization).toBe("Bearer fake-token");
+    expect(h["Notion-Version"]).toBe("2022-06-28");
+    expect(h["Content-Type"]).toBe("application/json");
+  });
+
+  it("omits Authorization without a local token, so the environment can inject it", () => {
+    const h = notionHeaders(undefined, "2022-06-28");
+    expect(h).not.toHaveProperty("Authorization");
+    expect(h["Notion-Version"]).toBe("2022-06-28");
+    expect(h["Content-Type"]).toBe("application/json");
+  });
+
+  it("explains a 401 without exposing ids or headers", () => {
+    const msg = notionFailureMessage(401, "unauthorized", "databases/0123456789abcdef0123456789abcdef");
+    expect(msg).toContain("HTTP 401 (unauthorized) on databases/<id>");
+    expect(msg).toContain("No usable Notion credential was available");
+    expect(msg).not.toContain("0123456789abcdef");
+    expect(msg).not.toMatch(/Bearer|Authorization/);
+  });
+
+  it("keeps other failures to status, code and path", () => {
+    expect(notionFailureMessage(404, "object_not_found", "blocks/0123456789abcdef0123456789abcdef/children?page_size=100")).toBe(
+      "Notion request failed: HTTP 404 (object_not_found) on blocks/<id>/children",
+    );
   });
 });

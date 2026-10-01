@@ -101,7 +101,7 @@ node scripts/import-catalog.ts             # fetch, map and validate; writes not
 node scripts/import-catalog.ts --apply     # validate, then store the snapshot
 ```
 
-It needs `NOTION_API_KEY`, `NOTION_CREATIVE_PATHS_DATABASE_ID` and, for `--apply`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, from the environment only. Any discrepancy (not exactly 63 valid pages, duplicate ids or numbers, missing text, ambiguous mapping) stops it before anything is written. Re-importing identical content is a no-op.
+It needs `NOTION_CREATIVE_PATHS_DATABASE_ID`, `NOTION_API_KEY` (optional where the environment injects the Notion credential; in cloud sessions run it with `NODE_USE_ENV_PROXY=1`) and, for `--apply`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, from the environment only. Any discrepancy (not exactly 63 valid pages, duplicate ids or numbers, missing text, ambiguous mapping) stops it before anything is written. Re-importing identical content is a no-op.
 
 ## Server secrets for a deployment
 
