@@ -4,6 +4,8 @@ import {
   blocksToText,
   CatalogDiscrepancy,
   detectMapping,
+  diagnosePage,
+  duplicateTitles,
   EXPECTED_PATH_COUNT,
   mapPage,
   notionFailureMessage,
@@ -176,5 +178,36 @@ describe("Notion request auth", () => {
     expect(notionFailureMessage(404, "object_not_found", "blocks/0123456789abcdef0123456789abcdef/children?page_size=100")).toBe(
       "Notion request failed: HTTP 404 (object_not_found) on blocks/<id>/children",
     );
+  });
+});
+
+describe("import diagnostics", () => {
+  const mapping = detectMapping(schema);
+  const page = (props: NotionPage["properties"]): NotionPage => ({ id: "p-diag", properties: props });
+
+  it("identifies a page by id, raw number, title and section, never by body or prompt", () => {
+    const d = diagnosePage(
+      page({
+        Nome: { type: "title", title: [{ plain_text: "Caminho fictício" }] },
+        "Número": { type: "number", number: null },
+        "Seção": { type: "select", select: { name: "Seção fictícia" } },
+        Prompt: { type: "rich_text", rich_text: [{ plain_text: "prompt secreto" }] },
+      }),
+      mapping,
+    );
+    expect(d).toEqual({ id: "p-diag", number: "(empty)", title: "Caminho fictício", section: "Seção fictícia" });
+    expect(JSON.stringify(d)).not.toContain("prompt secreto");
+  });
+
+  it("shows a non-integer number as is", () => {
+    const d = diagnosePage(page({ Nome: { type: "title", title: [] }, "Número": { type: "number", number: 4.5 } }), mapping);
+    expect(d.number).toBe("4.5");
+    expect(d.title).toBe("(empty)");
+    expect(d.section).toBe("(none)");
+  });
+
+  it("lists duplicate titles case-insensitively", () => {
+    expect(duplicateTitles(["Eco", "eco ", "Ponte"])).toEqual(['"Eco" (2)']);
+    expect(duplicateTitles(["Eco", "Ponte"])).toEqual([]);
   });
 });

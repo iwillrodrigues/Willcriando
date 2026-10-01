@@ -8,8 +8,9 @@
  * Backend-only. Reads NOTION_API_KEY (optional where the environment injects
  * the Notion credential), NOTION_CREATIVE_PATHS_DATABASE_ID and,
  * for --apply, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the
- * environment. It never prints a secret or any editorial content; the log
- * holds counts, property names and problems only.
+ * environment. It never prints a secret, a page body or prompt text; the log
+ * holds counts, property names, a page inventory (number, title, section,
+ * source page id) and problems.
  *
  * Optional mapping overrides: NOTION_PROP_NUMBER, NOTION_PROP_TITLE,
  * NOTION_PROP_SECTION, NOTION_PROP_PROMPT (a property name or "none") and
@@ -27,6 +28,8 @@ import {
   CatalogDiscrepancy,
   describeCatalog,
   detectMapping,
+  diagnosePage,
+  duplicateTitles,
   mapPage,
   notionFailureMessage,
   notionHeaders,
@@ -87,7 +90,10 @@ async function allPages(): Promise<NotionPage[]> {
   return pages.filter((p) => !p.archived && !p.in_trash);
 }
 
-async function blockTree(blockId: string, depth = 0): Promise<NotionBlock[]> {
+const MAX_DEPTH = 5;
+
+/** Reads a page body; flags content nested deeper than MAX_DEPTH instead of dropping it silently. */
+async function blockTree(blockId: string, state: { truncated: boolean }, depth = 0): Promise<NotionBlock[]> {
   const blocks: NotionBlock[] = [];
   let cursor: string | undefined;
   do {
@@ -96,8 +102,9 @@ async function blockTree(blockId: string, depth = 0): Promise<NotionBlock[]> {
       `blocks/${blockId}/children?${query}`,
     );
     for (const block of res.results) {
-      if (block.has_children && depth < 5 && block.type !== "child_page" && block.type !== "child_database") {
-        block.children = await blockTree(block.id, depth + 1);
+      if (block.has_children && block.type !== "child_page" && block.type !== "child_database") {
+        if (depth < MAX_DEPTH) block.children = await blockTree(block.id, state, depth + 1);
+        else state.truncated = true;
       }
       blocks.push(block);
     }
@@ -144,11 +151,15 @@ async function main() {
 
   const problems: string[] = [];
   const records: CatalogRecord[] = [];
+  const inventory: { line: string; sort: number }[] = [];
   let bodiesWithText = 0;
   for (const page of pages) {
+    const before = problems.length;
     let body: string | null = null;
     if (mapping.content === "body" || !ov.content) {
-      const blocks = await blockTree(page.id);
+      const state = { truncated: false };
+      const blocks = await blockTree(page.id, state);
+      if (state.truncated) problems.push(`page ${page.id} has content nested deeper than ${MAX_DEPTH} levels.`);
       const unsupported = unsupportedBlockTypes(blocks);
       body = blocksToText(blocks);
       if (body) bodiesWithText++;
@@ -158,7 +169,17 @@ async function main() {
     }
     const record = mapPage(page, mapping, body, problems);
     if (record) records.push(record);
+    const d = diagnosePage(page, mapping);
+    const failed = problems.slice(before).map((p) => p.replace(`page ${page.id} `, "")).join(" ");
+    inventory.push({
+      sort: record ? record.path_number : Number.MAX_SAFE_INTEGER,
+      line: `  ${d.number} | ${d.title} | ${d.section} | ${d.id} | ${failed ? `INVALID: ${failed}` : "ok"}`,
+    });
   }
+  console.log(`Inventory (${pages.length} active pages; number | title | section | source page id | status):`);
+  for (const row of inventory.sort((a, b) => a.sort - b.sort)) console.log(row.line);
+  const dupTitles = duplicateTitles(pages.map((p) => diagnosePage(p, mapping).title));
+  console.log(dupTitles.length ? `Duplicate titles: ${dupTitles.join(", ")}` : "Duplicate titles: none");
   if (!ov.content && mapping.content !== "body" && bodiesWithText > 0) {
     problems.push(
       `Both the "${mapping.content}" property and page bodies (${bodiesWithText}) hold text. ` +

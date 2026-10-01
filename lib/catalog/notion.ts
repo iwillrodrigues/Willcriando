@@ -306,3 +306,35 @@ export function notionFailureMessage(status: number, code: string, path: string)
     ? `${message}. No usable Notion credential was available: set NOTION_API_KEY or attach the Notion connection to the environment.`
     : message;
 }
+
+export type PageDiagnosis = { id: string; number: string; title: string; section: string };
+
+/**
+ * Identity fields for the import log: id, the raw number value, title and
+ * section. Never the body or the prompt text.
+ */
+export function diagnosePage(page: NotionPage, mapping: Mapping): PageDiagnosis {
+  const raw = page.properties[mapping.number];
+  let number = "(missing)";
+  if (raw?.type === "number") number = raw.number === null || raw.number === undefined ? "(empty)" : String(raw.number);
+  else if (raw) {
+    const n = numberValue(raw);
+    number = n === null ? `(empty or not an integer ${raw.type})` : String(n);
+  }
+  const ignored: string[] = [];
+  const title = textValue(page.properties[mapping.title], ignored, "title")?.trim() || "(empty)";
+  const section = (mapping.section && textValue(page.properties[mapping.section], ignored, "section")?.trim()) || "(none)";
+  return { id: page.id, number, title, section };
+}
+
+/** Titles used by more than one page (case-insensitive), with their counts. */
+export function duplicateTitles(titles: readonly string[]): string[] {
+  const counts = new Map<string, { title: string; n: number }>();
+  for (const title of titles) {
+    const key = title.trim().toLowerCase();
+    const entry = counts.get(key);
+    if (entry) entry.n++;
+    else counts.set(key, { title: title.trim(), n: 1 });
+  }
+  return [...counts.values()].filter((e) => e.n > 1).map((e) => `"${e.title}" (${e.n})`);
+}
