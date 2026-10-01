@@ -150,6 +150,11 @@ describe("runGeneration", () => {
     expect(call.strict.safeParse(output("23.5")).success).toBe(true);
     expect(call.strict.safeParse(output("9")).success).toBe(false);
     expect(call.strict.safeParse(output("23")).success).toBe(false);
+    expect(call.strict.safeParse(output("53")).success).toBe(false);
+    expect(call.strict.safeParse(output("9.3")).success).toBe(false);
+
+    // A recommendation is only stored; choosing a path stays a user action.
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(["begin_generation", "complete_analysis"]);
     expect(rpc).toHaveBeenCalledWith("begin_generation", expect.objectContaining({ p_user_id: "user-a", p_job_id: "job-a", p_kind: "analysis" }));
     expect(rpc).toHaveBeenCalledWith(
       "complete_analysis",

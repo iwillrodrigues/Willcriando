@@ -16,7 +16,7 @@ create temporary table tap (n serial, line text) on commit drop;
 grant all on table tap to public;
 grant usage on sequence tap_n_seq to public;
 
-select extensions.plan(70);
+select extensions.plan(71);
 
 insert into auth.users (id, email, aud, role)
 values
@@ -340,6 +340,11 @@ insert into tap(line) select extensions.results_eq(
       where r.analysis_id = current_setting('trilha.analysis')::uuid order by r.rank $q$,
   $q$ values (1, '3'), (2, '9.3'), (3, '12') $q$,
   'recommendations keep their order and point at catalog paths');
+
+insert into tap(line) select extensions.is(
+  (select count(*)::int from public.path_selections
+    where job_id = current_setting('trilha.job_a')::uuid and origin = 'recommended'),
+  0, 'storing recommendations does not select a path');
 
 insert into tap(line) select extensions.is(
   (select status from public.generation_requests where id = current_setting('trilha.req_analysis')::uuid),

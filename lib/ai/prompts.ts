@@ -8,7 +8,7 @@
  */
 
 export const PROMPT_VERSIONS = {
-  analysis: "analysis-2026-10-01.1",
+  analysis: "analysis-2026-10-01.2",
   concepts: "concepts-2026-10-01.1",
   presentation: "presentation-2026-09-30.1",
 } as const;
@@ -19,6 +19,8 @@ export type CatalogPathForPrompt = {
   section: string | null;
   content: string;
   prompt_text: string | null;
+  /** False for a group header. Headers never enter the analysis catalog. */
+  selectable?: boolean;
 };
 
 const STYLE = [
@@ -28,14 +30,20 @@ const STYLE = [
   "Não invente fatos, números, marcas ou dados que não estejam no briefing.",
 ].join("\n");
 
+/**
+ * The catalog the model chooses from: selectable paths only, each with its
+ * code, title and editorial text verbatim (page body and "Texto (prompt)").
+ * No section or other metadata.
+ */
 function catalogBlock(paths: readonly CatalogPathForPrompt[]): string {
   return paths
+    .filter((p) => p.selectable !== false)
     .map((p) =>
       [
         `<caminho codigo="${p.editorial_code}">`,
         `Título: ${p.title}`,
-        p.section ? `Seção: ${p.section}` : null,
         p.content ? `Conteúdo:\n${p.content}` : null,
+        p.prompt_text ? `Texto do caminho:\n${p.prompt_text}` : null,
         "</caminho>",
       ]
         .filter(Boolean)

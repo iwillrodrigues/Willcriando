@@ -26,6 +26,24 @@ describe("prompts", () => {
     expect(system).toContain("exatamente 3");
   });
 
+  it("gives each selectable path its code, title and preserved Texto (prompt), without metadata", () => {
+    // The real catalog keeps its editorial text in "Texto (prompt)" with an empty body.
+    const p = { ...path("9.3"), content: "", prompt_text: "Texto editorial fictício\ncom quebra." };
+    const { system } = analysisPrompt("Briefing.", [p]);
+    expect(system).toContain('<caminho codigo="9.3">\nTítulo: Caminho fictício 9.3\nTexto do caminho:\nTexto editorial fictício\ncom quebra.\n</caminho>');
+    expect(system).not.toContain("Seção");
+    expect(system).not.toContain("Conteúdo:");
+  });
+
+  it("never puts a group header in the analysis catalog, even if one is passed in", () => {
+    const header = { ...path(9), title: "Cabeçalho fictício", content: "", prompt_text: null, selectable: false };
+    const { system } = analysisPrompt("Briefing.", [path("1.2"), header, { ...path("9.1"), selectable: true }]);
+    expect(system).toContain('<caminho codigo="1.2">');
+    expect(system).toContain('<caminho codigo="9.1">');
+    expect(system).not.toContain('<caminho codigo="9">');
+    expect(system).not.toContain("Cabeçalho fictício");
+  });
+
   it("passes the exact path content and instruction when applying a path", () => {
     const p = path("9.3");
     const { user } = conceptsPrompt({ briefing: "Briefing fictício.", path: p, analysis: null });
