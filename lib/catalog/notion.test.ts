@@ -6,7 +6,10 @@ import {
   detectMapping,
   diagnosePage,
   duplicateTitles,
-  EXPECTED_PATH_COUNT,
+  compareCodes,
+  EXPECTED_NODE_COUNT,
+  EXPECTED_SELECTABLE_COUNT,
+  groupHeaderCodes,
   mapPage,
   notionFailureMessage,
   notionHeaders,
@@ -40,14 +43,24 @@ function page(n: number, overrides: Partial<NotionPage["properties"]> = {}): Not
   };
 }
 
-function records(count: number): CatalogRecord[] {
-  return Array.from({ length: count }, (_, i) => ({
-    source_page_id: `p${i + 1}`,
+// The approved shape, with fictitious text: 1.2-1.6 without a parent,
+// 2-52 with 9 and 23 as empty group headers, 9.1-9.6 and 23.1-23.5.
+const CODES = [
+  ...[2, 3, 4, 5, 6].map((m) => `1.${m}`),
+  ...Array.from({ length: 51 }, (_, i) => String(i + 2)),
+  ...[1, 2, 3, 4, 5, 6].map((m) => `9.${m}`),
+  ...[1, 2, 3, 4, 5].map((m) => `23.${m}`),
+];
+const HEADERS = new Set(["9", "23"]);
+
+function catalog(): CatalogRecord[] {
+  return CODES.map((code) => ({
+    source_page_id: `p-${code}`,
     source_last_edited_at: null,
-    path_number: i + 1,
-    title: `Caminho fictício ${i + 1}`,
-    section: null,
-    content: "texto",
+    editorial_code: code,
+    title: `Caminho fictício ${code}`,
+    section: code.includes(".") ? "Subcaminho" : "Caminho",
+    content: HEADERS.has(code) ? "" : "texto",
     prompt_text: null,
   }));
 }
@@ -88,7 +101,7 @@ describe("mapPage", () => {
     expect(record).toEqual({
       source_page_id: "pagina-ficticia-4",
       source_last_edited_at: "2026-09-01T00:00:00.000Z",
-      path_number: 4,
+      editorial_code: "4",
       title: "Caminho fictício 4",
       section: "Seção fictícia",
       content: "Linha 1\nLinha 2",
@@ -96,7 +109,7 @@ describe("mapPage", () => {
     });
   });
 
-  it("reports a page without number, title or any text", () => {
+  it("reports a page without code or title; text is checked with the whole catalog", () => {
     const problems: string[] = [];
     const empty = page(5, {
       Nome: { type: "title", title: [] },
@@ -104,36 +117,92 @@ describe("mapPage", () => {
       Prompt: { type: "rich_text", rich_text: [] },
     });
     expect(mapPage(empty, mapping, "", problems)).toBeNull();
-    expect(problems).toHaveLength(3);
+    expect(problems).toHaveLength(2);
+  });
+
+  it("keeps decimal editorial codes exactly", () => {
+    for (const code of [1.2, 9.3, 23.5]) {
+      const record = mapPage(page(1, { "Número": { type: "number", number: code } }), mapping, "texto", []);
+      expect(record?.editorial_code).toBe(String(code));
+    }
+    expect(mapPage(page(1, { "Número": { type: "number", number: 23.5 } }), mapping, "", [])?.editorial_code).toBe("23.5");
+  });
+
+  it("rejects codes that are not 'N' or 'N.M'", () => {
+    for (const bad of [0, -1, 1.05]) {
+      const problems: string[] = [];
+      expect(mapPage(page(1, { "Número": { type: "number", number: bad } }), mapping, "texto", problems)).toBeNull();
+      expect(problems[0]).toMatch(/no valid editorial code/);
+    }
   });
 });
 
 describe("validateCatalog", () => {
-  it("expects the official catalog size of 67", () => {
-    expect(EXPECTED_PATH_COUNT).toBe(67);
+  it("expects 67 nodes and 65 selectable paths", () => {
+    expect(EXPECTED_NODE_COUNT).toBe(67);
+    expect(EXPECTED_SELECTABLE_COUNT).toBe(65);
   });
 
-  it("accepts exactly 67 unique paths numbered 1 to 67", () => {
-    expect(validateCatalog(records(67))).toHaveLength(67);
+  it("accepts the approved catalog: 67 nodes, 65 selectable, 9 and 23 as empty headers", () => {
+    const nodes = validateCatalog(catalog());
+    expect(nodes).toHaveLength(67);
+    expect(nodes.filter((n) => n.selectable)).toHaveLength(65);
+    expect(nodes.filter((n) => !n.selectable).map((n) => [n.editorial_code, n.content])).toEqual([
+      ["9", ""],
+      ["23", ""],
+    ]);
   });
 
-  it("rejects 63, 66 or 68 paths", () => {
-    expect(() => validateCatalog(records(63))).toThrowError(/found 63/);
-    expect(() => validateCatalog(records(66))).toThrowError(/found 66/);
-    const extra = [...records(67), { ...records(1)[0], source_page_id: "extra", path_number: 68 }];
+  it("keeps codes verbatim and orders a parent before its children", () => {
+    const codes = validateCatalog(catalog()).map((n) => n.editorial_code);
+    expect(codes.slice(0, 6)).toEqual(["1.2", "1.3", "1.4", "1.5", "1.6", "2"]);
+    expect(codes.slice(codes.indexOf("9"), codes.indexOf("9") + 8)).toEqual(["9", "9.1", "9.2", "9.3", "9.4", "9.5", "9.6", "10"]);
+    expect(codes).toContain("23.5");
+    expect(codes.at(-1)).toBe("52");
+  });
+
+  it("accepts 1.2-1.6 without a parent node or 1.1", () => {
+    const nodes = validateCatalog(catalog());
+    expect(nodes.some((n) => n.editorial_code === "1" || n.editorial_code === "1.1")).toBe(false);
+    expect(nodes.filter((n) => n.editorial_code.startsWith("1.")).every((n) => n.selectable)).toBe(true);
+  });
+
+  it("rejects 66 or 68 nodes", () => {
+    expect(() => validateCatalog(catalog().slice(1))).toThrowError(/Expected 67 catalog nodes, found 66/);
+    const extra = [...catalog(), { ...catalog()[10], source_page_id: "extra", editorial_code: "53" }];
     expect(() => validateCatalog(extra)).toThrowError(/found 68/);
-    expect(() => validateCatalog(extra)).toThrowError(/outside 1-67: 68/);
   });
 
-  it("rejects duplicated ids and numbers", () => {
-    const dupNumber = records(67).map((r) => (r.path_number === 67 ? { ...r, path_number: 1 } : r));
-    expect(() => validateCatalog(dupNumber)).toThrowError(/appears 2 times/);
-    const dupId = records(67).map((r) => (r.path_number === 67 ? { ...r, source_page_id: "p1" } : r));
-    expect(() => validateCatalog(dupId)).toThrowError(/Source page p1 appears 2 times/);
+  it("rejects duplicate source ids and duplicate editorial codes", () => {
+    const dupCode = catalog().map((r) => (r.editorial_code === "52" ? { ...r, editorial_code: "51" } : r));
+    expect(() => validateCatalog(dupCode)).toThrowError(/Editorial code 51 appears 2 times/);
+    const dupId = catalog().map((r) => (r.editorial_code === "52" ? { ...r, source_page_id: "p-2" } : r));
+    expect(() => validateCatalog(dupId)).toThrowError(/Source page p-2 appears 2 times/);
+  });
+
+  it("rejects a selectable path without content or prompt text", () => {
+    const empty = catalog().map((r) => (r.editorial_code === "9.3" ? { ...r, content: "  ", prompt_text: null } : r));
+    expect(() => validateCatalog(empty)).toThrowError(/p-9.3 \(9.3\) is a selectable path with neither content nor prompt text/);
+  });
+
+  it("rejects a catalog whose structure does not give 65 selectable paths", () => {
+    // A third group header (5 gets a child) leaves 64 selectable among 67.
+    const moved = catalog().map((r) => (r.editorial_code === "52" ? { ...r, editorial_code: "5.1" } : r));
+    expect(() => validateCatalog(moved)).toThrowError(/Expected 65 selectable paths, found 64/);
   });
 
   it("carries mapping problems into the stop", () => {
-    expect(() => validateCatalog(records(67), ["page x has an empty title."])).toThrowError(/empty title/);
+    expect(() => validateCatalog(catalog(), ["page x has an empty title."])).toThrowError(/empty title/);
+  });
+});
+
+describe("catalog order and headers", () => {
+  it("compares codes numerically, parent first", () => {
+    expect(["10", "9.2", "2", "9", "1.6", "9.10"].sort(compareCodes)).toEqual(["1.6", "2", "9", "9.2", "9.10", "10"]);
+  });
+
+  it("marks only top-level codes that have children as headers", () => {
+    expect([...groupHeaderCodes(["1.2", "9", "9.1", "10", "23", "23.4"])]).toEqual(["9", "23"]);
   });
 });
 

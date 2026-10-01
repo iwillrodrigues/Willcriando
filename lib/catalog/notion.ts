@@ -7,7 +7,13 @@
  * text, never rewritten, summarized or translated.
  */
 
-export const EXPECTED_PATH_COUNT = 67;
+/** Catalog nodes per snapshot: selectable paths plus group headers. */
+export const EXPECTED_NODE_COUNT = 67;
+/** Nodes that can be recommended, drawn and applied. */
+export const EXPECTED_SELECTABLE_COUNT = 65;
+
+/** Editorial code: "9" or "9.3". At most one level below a top-level code. */
+export const EDITORIAL_CODE = /^[1-9][0-9]*(\.[1-9][0-9]*)?$/;
 
 export type RichText = { plain_text?: string };
 
@@ -55,7 +61,7 @@ export type MappingOverrides = Partial<Record<keyof Mapping, string>>;
 export type CatalogRecord = {
   source_page_id: string;
   source_last_edited_at: string | null;
-  path_number: number;
+  editorial_code: string;
   title: string;
   section: string | null;
   content: string;
@@ -180,16 +186,18 @@ export function detectMapping(schema: Record<string, NotionPropertySchema>, over
   return { number, title, section, prompt, content };
 }
 
-function numberValue(value: NotionPropertyValue | undefined): number | null {
+/** The editorial code exactly as the source holds it, or null when it is not a valid code. */
+function codeValue(value: NotionPropertyValue | undefined): string | null {
   if (!value) return null;
-  if (value.type === "number") return value.number ?? null;
-  if (value.type === "unique_id") return value.unique_id?.number ?? null;
-  if (value.type === "formula") return value.formula?.type === "number" ? (value.formula.number ?? null) : null;
-  if (value.type === "rich_text" || value.type === "title") {
-    const text = plainText(value.rich_text ?? value.title).trim();
-    return /^\d+$/.test(text) ? Number(text) : null;
-  }
-  return null;
+  let raw: string | null = null;
+  if (value.type === "number") raw = value.number === null || value.number === undefined ? null : String(value.number);
+  else if (value.type === "unique_id") raw = value.unique_id?.number == null ? null : String(value.unique_id.number);
+  else if (value.type === "formula") {
+    if (value.formula?.type === "number" && value.formula.number != null) raw = String(value.formula.number);
+    else if (value.formula?.type === "string") raw = value.formula.string ?? null;
+  } else if (value.type === "rich_text" || value.type === "title") raw = plainText(value.rich_text ?? value.title);
+  raw = raw?.trim() ?? null;
+  return raw && EDITORIAL_CODE.test(raw) ? raw : null;
 }
 
 function textValue(value: NotionPropertyValue | undefined, problems: string[], label: string): string | null {
@@ -218,23 +226,21 @@ function textValue(value: NotionPropertyValue | undefined, problems: string[], l
 
 export function mapPage(page: NotionPage, mapping: Mapping, bodyText: string | null, problems: string[]): CatalogRecord | null {
   const where = `page ${page.id}`;
-  const number = numberValue(page.properties[mapping.number]);
+  const code = codeValue(page.properties[mapping.number]);
   const title = (textValue(page.properties[mapping.title], problems, `${where} title`) ?? "").trim();
   const section = mapping.section ? textValue(page.properties[mapping.section], problems, `${where} section`) : null;
   const prompt = mapping.prompt ? textValue(page.properties[mapping.prompt], problems, `${where} prompt`) : null;
   const content = mapping.content === "body" ? (bodyText ?? "") : (textValue(page.properties[mapping.content], problems, `${where} content`) ?? "");
 
+  // Whether a node needs text depends on the whole catalog (group headers
+  // may be empty), so validateCatalog checks it.
   let ok = true;
-  if (number === null || !Number.isInteger(number)) {
-    problems.push(`${where} has no integer path number.`);
+  if (code === null) {
+    problems.push(`${where} has no valid editorial code ("9" or "9.3").`);
     ok = false;
   }
   if (!title) {
     problems.push(`${where} has an empty title.`);
-    ok = false;
-  }
-  if (!content.trim() && !(prompt ?? "").trim()) {
-    problems.push(`${where} has neither explanatory content nor prompt text.`);
     ok = false;
   }
   if (!ok) return null;
@@ -242,7 +248,7 @@ export function mapPage(page: NotionPage, mapping: Mapping, bodyText: string | n
   return {
     source_page_id: page.id,
     source_last_edited_at: page.last_edited_time ?? null,
-    path_number: number as number,
+    editorial_code: code as string,
     title,
     section: section?.trim() ? section.trim() : null,
     content: content.trim(),
@@ -250,36 +256,74 @@ export function mapPage(page: NotionPage, mapping: Mapping, bodyText: string | n
   };
 }
 
-/** Exactly 67 records, unique ids, numbers exactly 1..67. Throws otherwise. */
-export function validateCatalog(records: readonly CatalogRecord[], mappingProblems: readonly string[] = []): CatalogRecord[] {
+export type CatalogNode = CatalogRecord & { selectable: boolean };
+
+function codeParts(code: string): [number, number | null] {
+  const [major, minor] = code.split(".");
+  return [Number(major), minor === undefined ? null : Number(minor)];
+}
+
+/** Catalog order: by the integer parts of the code, a parent before its children. */
+export function compareCodes(a: string, b: string): number {
+  const [aMajor, aMinor] = codeParts(a);
+  const [bMajor, bMinor] = codeParts(b);
+  return aMajor - bMajor || (aMinor ?? 0) - (bMinor ?? 0);
+}
+
+/**
+ * A group header is a top-level code that has children ("9" when "9.1"
+ * exists). A child does not need its parent ("1.2" without "1" is valid).
+ */
+export function groupHeaderCodes(codes: readonly string[]): Set<string> {
+  const majorsWithChildren = new Set(codes.filter((c) => c.includes(".")).map((c) => c.split(".")[0]));
+  return new Set(codes.filter((c) => !c.includes(".") && majorsWithChildren.has(c)));
+}
+
+const hasText = (r: CatalogRecord) => r.content.trim().length > 0 || (r.prompt_text ?? "").trim().length > 0;
+
+/**
+ * Exactly 67 nodes with unique source ids and editorial codes, 65 of them
+ * selectable, each selectable node with content or prompt text. Returns the
+ * nodes in catalog order. Throws otherwise. The database repeats these rules.
+ */
+export function validateCatalog(records: readonly CatalogRecord[], mappingProblems: readonly string[] = []): CatalogNode[] {
   const problems = [...mappingProblems];
-  if (records.length !== EXPECTED_PATH_COUNT) {
-    problems.push(`Expected ${EXPECTED_PATH_COUNT} valid paths, found ${records.length}.`);
+  if (records.length !== EXPECTED_NODE_COUNT) {
+    problems.push(`Expected ${EXPECTED_NODE_COUNT} catalog nodes, found ${records.length}.`);
   }
   const ids = new Map<string, number>();
-  const numbers = new Map<number, number>();
+  const codes = new Map<string, number>();
   for (const r of records) {
     ids.set(r.source_page_id, (ids.get(r.source_page_id) ?? 0) + 1);
-    numbers.set(r.path_number, (numbers.get(r.path_number) ?? 0) + 1);
+    codes.set(r.editorial_code, (codes.get(r.editorial_code) ?? 0) + 1);
   }
   for (const [id, n] of ids) if (n > 1) problems.push(`Source page ${id} appears ${n} times.`);
-  for (const [num, n] of numbers) if (n > 1) problems.push(`Path number ${num} appears ${n} times.`);
-  const missing: number[] = [];
-  for (let i = 1; i <= EXPECTED_PATH_COUNT; i++) if (!numbers.has(i)) missing.push(i);
-  if (missing.length) problems.push(`Missing path numbers: ${missing.join(", ")}.`);
-  const outOfRange = [...numbers.keys()].filter((n) => n < 1 || n > EXPECTED_PATH_COUNT);
-  if (outOfRange.length) problems.push(`Path numbers outside 1-${EXPECTED_PATH_COUNT}: ${outOfRange.join(", ")}.`);
+  for (const [code, n] of codes) if (n > 1) problems.push(`Editorial code ${code} appears ${n} times.`);
+
+  const headers = groupHeaderCodes([...codes.keys()]);
+  const nodes = records
+    .map((r) => ({ ...r, selectable: !headers.has(r.editorial_code) }))
+    .sort((a, b) => compareCodes(a.editorial_code, b.editorial_code));
+  const selectable = nodes.filter((n) => n.selectable);
+  if (selectable.length !== EXPECTED_SELECTABLE_COUNT) {
+    problems.push(`Expected ${EXPECTED_SELECTABLE_COUNT} selectable paths, found ${selectable.length}.`);
+  }
+  for (const n of selectable) {
+    if (!hasText(n)) problems.push(`page ${n.source_page_id} (${n.editorial_code}) is a selectable path with neither content nor prompt text.`);
+  }
 
   if (problems.length) throw new CatalogDiscrepancy(problems);
-  return [...records].sort((a, b) => a.path_number - b.path_number);
+  return nodes;
 }
 
 /** Summary without editorial content, safe to print in the import log. */
-export function describeCatalog(records: readonly CatalogRecord[]) {
+export function describeCatalog(records: readonly CatalogNode[]) {
   const sections = new Map<string, number>();
   for (const r of records) sections.set(r.section ?? "(none)", (sections.get(r.section ?? "(none)") ?? 0) + 1);
   return {
     count: records.length,
+    selectable: records.filter((r) => r.selectable).length,
+    groupHeaders: records.filter((r) => !r.selectable).map((r) => `${r.editorial_code} ${r.source_page_id}`),
     sections: Object.fromEntries(sections),
     withPrompt: records.filter((r) => r.prompt_text).length,
     withContent: records.filter((r) => r.content).length,
@@ -317,10 +361,7 @@ export function diagnosePage(page: NotionPage, mapping: Mapping): PageDiagnosis 
   const raw = page.properties[mapping.number];
   let number = "(missing)";
   if (raw?.type === "number") number = raw.number === null || raw.number === undefined ? "(empty)" : String(raw.number);
-  else if (raw) {
-    const n = numberValue(raw);
-    number = n === null ? `(empty or not an integer ${raw.type})` : String(n);
-  }
+  else if (raw) number = codeValue(raw) ?? `(empty or not a code, ${raw.type})`;
   const ignored: string[] = [];
   const title = textValue(page.properties[mapping.title], ignored, "title")?.trim() || "(empty)";
   const section = (mapping.section && textValue(page.properties[mapping.section], ignored, "section")?.trim()) || "(none)";

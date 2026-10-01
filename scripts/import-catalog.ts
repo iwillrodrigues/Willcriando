@@ -1,5 +1,6 @@
 /**
- * Imports the 67-path editorial catalog from Notion into Supabase.
+ * Imports the editorial catalog (67 nodes: 65 selectable paths and their
+ * group headers) from Notion into Supabase.
  *
  *   node scripts/import-catalog.ts --inspect   schema and detected mapping only
  *   node scripts/import-catalog.ts             fetch, map and validate (dry run)
@@ -9,7 +10,7 @@
  * the Notion credential), NOTION_CREATIVE_PATHS_DATABASE_ID and,
  * for --apply, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from the
  * environment. It never prints a secret, a page body or prompt text; the log
- * holds counts, property names, a page inventory (number, title, section,
+ * holds counts, property names, a page inventory (code, title, section,
  * source page id) and problems.
  *
  * Optional mapping overrides: NOTION_PROP_NUMBER, NOTION_PROP_TITLE,
@@ -17,15 +18,18 @@
  * NOTION_PROP_CONTENT (a property name or "body"). NOTION_API_VERSION
  * defaults to 2022-06-28.
  *
- * The import is all or nothing: any discrepancy (not exactly 67 valid pages,
- * duplicate ids or numbers, missing required text, ambiguous mapping,
- * inaccessible page) stops it before anything is written. Importing the same
+ * The import is all or nothing: any discrepancy (not exactly 67 nodes and 65
+ * selectable paths, duplicate ids or editorial codes, a missing code or title,
+ * a selectable path without text, unsupported or too deeply nested blocks,
+ * ambiguous mapping, inaccessible page) stops it before anything is written. Importing the same
  * content twice is a no-op in the database.
  */
 
 import {
   blocksToText,
   CatalogDiscrepancy,
+  compareCodes,
+  groupHeaderCodes,
   describeCatalog,
   detectMapping,
   diagnosePage,
@@ -151,7 +155,7 @@ async function main() {
 
   const problems: string[] = [];
   const records: CatalogRecord[] = [];
-  const inventory: { line: string; sort: number }[] = [];
+  const inventory: { cells: string; failed: string; code: string | null }[] = [];
   let bodiesWithText = 0;
   for (const page of pages) {
     const before = problems.length;
@@ -171,13 +175,15 @@ async function main() {
     if (record) records.push(record);
     const d = diagnosePage(page, mapping);
     const failed = problems.slice(before).map((p) => p.replace(`page ${page.id} `, "")).join(" ");
-    inventory.push({
-      sort: record ? record.path_number : Number.MAX_SAFE_INTEGER,
-      line: `  ${d.number} | ${d.title} | ${d.section} | ${d.id} | ${failed ? `INVALID: ${failed}` : "ok"}`,
-    });
+    inventory.push({ code: record?.editorial_code ?? null, failed, cells: `${d.number} | ${d.title} | ${d.section} | ${d.id}` });
   }
-  console.log(`Inventory (${pages.length} active pages; number | title | section | source page id | status):`);
-  for (const row of inventory.sort((a, b) => a.sort - b.sort)) console.log(row.line);
+  const headers = groupHeaderCodes(records.map((r) => r.editorial_code));
+  console.log(`Inventory (${pages.length} active pages; code | title | section | source page id | status):`);
+  inventory.sort((a, b) => (a.code && b.code ? compareCodes(a.code, b.code) : a.code ? -1 : b.code ? 1 : 0));
+  for (const row of inventory) {
+    const status = row.failed ? `INVALID: ${row.failed}` : row.code && headers.has(row.code) ? "group header" : "path";
+    console.log(`  ${row.cells} | ${status}`);
+  }
   const dupTitles = duplicateTitles(pages.map((p) => diagnosePage(p, mapping).title));
   console.log(dupTitles.length ? `Duplicate titles: ${dupTitles.join(", ")}` : "Duplicate titles: none");
   if (!ov.content && mapping.content !== "body" && bodiesWithText > 0) {
@@ -200,7 +206,19 @@ async function main() {
   const response = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/import_catalog_snapshot`, {
     method: "POST",
     headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ p_source_database_id: databaseId, p_paths: valid }),
+    // Order and selectability are derived again by the database.
+    body: JSON.stringify({
+      p_source_database_id: databaseId,
+      p_paths: valid.map((n) => ({
+        source_page_id: n.source_page_id,
+        source_last_edited_at: n.source_last_edited_at,
+        editorial_code: n.editorial_code,
+        title: n.title,
+        section: n.section,
+        content: n.content,
+        prompt_text: n.prompt_text,
+      })),
+    }),
   });
   if (!response.ok) {
     let message = "unknown";
