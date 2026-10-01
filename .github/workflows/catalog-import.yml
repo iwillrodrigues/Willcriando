@@ -120,6 +120,12 @@ jobs:
           fi
           echo "First import accepted by the database with the validated mapping."
 
+      # The second import is the third full Notion read in under a minute, and it
+      # hit HTTP 429 twice. A pause lets Notion's rate limit recover; the importer
+      # also retries 429s on its own. Writes nothing, reads nothing.
+      - name: Pause before second import (Notion rate limit)
+        run: sleep 60
+
       - name: Import catalog (second run, idempotency)
         id: second
         env:

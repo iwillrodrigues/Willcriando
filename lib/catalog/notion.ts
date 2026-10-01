@@ -351,6 +351,44 @@ export function notionFailureMessage(status: number, code: string, path: string)
     : message;
 }
 
+/** Attempts per Notion request, the first included. Only HTTP 429 is retried. */
+export const NOTION_MAX_ATTEMPTS = 5;
+/** Waits before retries 1-4 when Retry-After is missing or invalid: 30 s in total. */
+export const NOTION_FALLBACK_DELAYS_MS = [2_000, 4_000, 8_000, 16_000] as const;
+/** Upper bound on a single wait, whatever Retry-After asks for. */
+export const NOTION_MAX_RETRY_WAIT_MS = 60_000;
+
+/**
+ * Retry-After as milliseconds, capped at NOTION_MAX_RETRY_WAIT_MS. Notion sends
+ * delay-seconds; anything else (empty, negative, an HTTP date) is invalid: null.
+ */
+export function retryAfterMs(header: string | null): number | null {
+  const value = header?.trim();
+  if (!value || !/^\d+(\.\d+)?$/.test(value)) return null;
+  return Math.min(Math.ceil(Number(value) * 1000), NOTION_MAX_RETRY_WAIT_MS);
+}
+
+/**
+ * Sends a Notion request, retrying only on HTTP 429: it waits Retry-After when
+ * valid, otherwise the fallback delay, for at most NOTION_MAX_ATTEMPTS attempts.
+ * Returns the last response (still a 429 when retries are exhausted) so the
+ * caller reports the original failure. onRetry gets counts and the wait only.
+ */
+export async function sendWithRateLimitRetry(
+  send: () => Promise<Response>,
+  sleep: (ms: number) => Promise<void>,
+  onRetry?: (attempt: number, waitMs: number) => void,
+): Promise<{ response: Response; attempts: number }> {
+  for (let attempt = 1; ; attempt++) {
+    const response = await send();
+    if (response.status !== 429 || attempt >= NOTION_MAX_ATTEMPTS) return { response, attempts: attempt };
+    const waitMs = retryAfterMs(response.headers.get("retry-after")) ?? NOTION_FALLBACK_DELAYS_MS[attempt - 1];
+    await response.body?.cancel().catch(() => {});
+    onRetry?.(attempt, waitMs);
+    await sleep(waitMs);
+  }
+}
+
 export type PageDiagnosis = { id: string; number: string; title: string; section: string };
 
 /**

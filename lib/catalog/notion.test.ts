@@ -11,8 +11,13 @@ import {
   EXPECTED_SELECTABLE_COUNT,
   groupHeaderCodes,
   mapPage,
+  NOTION_FALLBACK_DELAYS_MS,
+  NOTION_MAX_ATTEMPTS,
+  NOTION_MAX_RETRY_WAIT_MS,
   notionFailureMessage,
   notionHeaders,
+  retryAfterMs,
+  sendWithRateLimitRetry,
   validateCatalog,
   type CatalogRecord,
   type NotionPage,
@@ -247,6 +252,86 @@ describe("Notion request auth", () => {
     expect(notionFailureMessage(404, "object_not_found", "blocks/0123456789abcdef0123456789abcdef/children?page_size=100")).toBe(
       "Notion request failed: HTTP 404 (object_not_found) on blocks/<id>/children",
     );
+  });
+});
+
+describe("Notion rate-limit retry", () => {
+  const limited = (retryAfter?: string) =>
+    new Response(JSON.stringify({ code: "rate_limited" }), {
+      status: 429,
+      headers: retryAfter === undefined ? {} : { "Retry-After": retryAfter },
+    });
+  const ok = () => new Response("{}", { status: 200 });
+
+  // Replays the given responses in order and records every wait instead of sleeping.
+  function harness(responses: Response[]) {
+    const waits: number[] = [];
+    const retries: [number, number][] = [];
+    let sent = 0;
+    const run = () =>
+      sendWithRateLimitRetry(
+        async () => responses[sent++],
+        async (ms) => {
+          waits.push(ms);
+        },
+        (attempt, waitMs) => retries.push([attempt, waitMs]),
+      );
+    return { run, waits, retries, sent: () => sent };
+  }
+
+  it("returns an immediate success without waiting", async () => {
+    const h = harness([ok()]);
+    const { response, attempts } = await h.run();
+    expect(response.status).toBe(200);
+    expect(attempts).toBe(1);
+    expect(h.sent()).toBe(1);
+    expect(h.waits).toEqual([]);
+  });
+
+  it("retries a 429 and returns the following success", async () => {
+    const h = harness([limited(), ok()]);
+    const { response, attempts } = await h.run();
+    expect(response.status).toBe(200);
+    expect(attempts).toBe(2);
+    expect(h.retries).toEqual([[1, NOTION_FALLBACK_DELAYS_MS[0]]]);
+  });
+
+  it("waits the Retry-After seconds when the header is valid", async () => {
+    const h = harness([limited("3"), limited("0.5"), ok()]);
+    await h.run();
+    expect(h.waits).toEqual([3_000, 500]);
+  });
+
+  it("falls back to the fixed delays when Retry-After is missing or invalid", async () => {
+    const h = harness([limited(), limited("soon"), limited("-1"), limited("Wed, 21 Oct 2026 07:28:00 GMT"), ok()]);
+    const { attempts } = await h.run();
+    expect(attempts).toBe(5);
+    expect(h.waits).toEqual([...NOTION_FALLBACK_DELAYS_MS]);
+  });
+
+  it("caps a long Retry-After", async () => {
+    expect(retryAfterMs("3600")).toBe(NOTION_MAX_RETRY_WAIT_MS);
+    expect(retryAfterMs("")).toBeNull();
+    expect(retryAfterMs(null)).toBeNull();
+  });
+
+  it("stops after the maximum attempts and returns the last 429", async () => {
+    const h = harness(Array.from({ length: NOTION_MAX_ATTEMPTS + 2 }, () => limited()));
+    const { response, attempts } = await h.run();
+    expect(response.status).toBe(429);
+    expect(attempts).toBe(NOTION_MAX_ATTEMPTS);
+    expect(h.sent()).toBe(NOTION_MAX_ATTEMPTS);
+    expect(h.waits).toHaveLength(NOTION_MAX_ATTEMPTS - 1);
+    expect(await response.json()).toEqual({ code: "rate_limited" });
+  });
+
+  it.each([401, 403, 400, 404, 500, 503])("does not retry HTTP %i", async (status) => {
+    const h = harness([new Response("{}", { status }), ok()]);
+    const { response, attempts } = await h.run();
+    expect(response.status).toBe(status);
+    expect(attempts).toBe(1);
+    expect(h.sent()).toBe(1);
+    expect(h.waits).toEqual([]);
   });
 });
 

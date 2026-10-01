@@ -37,6 +37,8 @@ import {
   mapPage,
   notionFailureMessage,
   notionHeaders,
+  NOTION_MAX_ATTEMPTS,
+  sendWithRateLimitRetry,
   unsupportedBlockTypes,
   validateCatalog,
   type CatalogRecord,
@@ -63,19 +65,28 @@ const token = process.env.NOTION_API_KEY?.trim() || undefined;
 const databaseId = requireEnv("NOTION_CREATIVE_PATHS_DATABASE_ID");
 const notionVersion = process.env.NOTION_API_VERSION?.trim() || "2022-06-28";
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 async function notion<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
-  const response = await fetch(`https://api.notion.com/v1/${path}`, {
-    method: init?.method ?? "GET",
-    headers: notionHeaders(token, notionVersion),
-    body: init?.body ? JSON.stringify(init.body) : undefined,
-  });
+  const { response, attempts } = await sendWithRateLimitRetry(
+    () =>
+      fetch(`https://api.notion.com/v1/${path}`, {
+        method: init?.method ?? "GET",
+        headers: notionHeaders(token, notionVersion),
+        body: init?.body ? JSON.stringify(init.body) : undefined,
+      }),
+    sleep,
+    (attempt, waitMs) =>
+      console.log(`Notion rate limited (attempt ${attempt} of ${NOTION_MAX_ATTEMPTS}); waiting ${waitMs} ms.`),
+  );
   if (!response.ok) {
     // Only the status and Notion's error code; never the request headers.
     let code = "unknown";
     try {
       code = ((await response.json()) as { code?: string }).code ?? code;
     } catch {}
-    throw new Error(notionFailureMessage(response.status, code, path));
+    const tries = attempts > 1 ? ` after ${attempts} attempts` : "";
+    throw new Error(`${notionFailureMessage(response.status, code, path)}${tries}`);
   }
   return (await response.json()) as T;
 }
