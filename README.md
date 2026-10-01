@@ -103,6 +103,8 @@ node scripts/import-catalog.ts --apply     # validate, then store the snapshot
 
 It needs `NOTION_CREATIVE_PATHS_DATABASE_ID`, `NOTION_API_KEY` (optional where the environment injects the Notion credential; in cloud sessions run it with `NODE_USE_ENV_PROXY=1`) and, for `--apply`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`, from the environment only. Any discrepancy (not exactly 67 valid pages, duplicate ids or numbers, missing text, ambiguous mapping) stops it before anything is written. Re-importing identical content is a no-op.
 
+Online, the manual workflow `.github/workflows/catalog-import.yml` (Actions → "Catalog import (willcriando dev)" → Run workflow) runs the same importer against the development project `anhaonrifwakoekksopv` only: read-only validation, `--apply`, then `--apply` again, requiring the same snapshot id both times. It reads `NOTION_API_KEY`, `NOTION_CREATIVE_PATHS_DATABASE_ID`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from GitHub Actions secrets and prints only counts and the job summary.
+
 ## Server secrets for a deployment
 
 Set in the hosting provider's secret store, never in files: `SUPABASE_SERVICE_ROLE_KEY` (backend generation functions only), `AI_PROVIDER_API_KEY` (Anthropic), optional `AI_MODEL`. The public variables are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
