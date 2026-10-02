@@ -1,0 +1,129 @@
+name: S3 migration (willcriando dev)
+
+# Manual only. Applies migration 20261002120000_s3_dismissal_versions_deletion.sql
+# from commit 476377b3ed19c168ea95326ac2e1c64d79df094c to the Supabase
+# development project willcriando (ref anhaonrifwakoekksopv) with the official
+# Supabase CLI (`supabase db push`), once, then validates it and runs the S1, S2
+# and S3 pgTAP suites, each in a transaction that rolls back.
+#
+# Secret (repository or "willcriando-dev" environment): SUPABASE_DB_URL, the
+# session pooler connection string of willcriando (port 5432). It is given only
+# to the steps that connect, and never printed.
+#
+# Every gate fails closed. Nothing is retried, repaired or registered by hand.
+# No deployment happens here.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project_ref:
+        description: "Type the target project ref (anhaonrifwakoekksopv) to allow the write"
+        required: true
+
+permissions:
+  contents: read
+
+# One migration run at a time against this project; a second run waits.
+concurrency:
+  group: supabase-migration-anhaonrifwakoekksopv
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PROJECT_REF: anhaonrifwakoekksopv
+  SUPABASE_CLI_VERSION: 2.119.0
+  PGSSLMODE: require
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: willcriando-dev
+    steps:
+      - name: Confirm target
+        env:
+          CONFIRM: ${{ inputs.confirm_project_ref }}
+        run: |
+          if [ "$CONFIRM" != "$EXPECTED_PROJECT_REF" ]; then
+            echo "::error title=Not confirmed::confirm_project_ref must be exactly $EXPECTED_PROJECT_REF."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify source
+        timeout-minutes: 2
+        env:
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: bash .github/scripts/s3-migration/run.sh source
+
+      - name: Verify target secret
+        timeout-minutes: 2
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash .github/scripts/s3-migration/run.sh target
+
+      # Pinned to the v1.7.3 commit: the CLI it installs later receives the database secret.
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Disable CLI telemetry
+        timeout-minutes: 1
+        run: supabase telemetry disable || true
+
+      - name: Preflight (read-only)
+        timeout-minutes: 6
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash .github/scripts/s3-migration/run.sh preflight
+
+      # The only write. Runs once; a failure or timeout is classified below, never retried.
+      - name: Apply S3 migration (supabase db push, once)
+        id: apply
+        timeout-minutes: 12
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash .github/scripts/s3-migration/run.sh apply
+
+      - name: Classify result (read-only)
+        if: always() && steps.apply.outputs.attempted == 'true'
+        timeout-minutes: 4
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PUSH_EXIT_CODE: ${{ steps.apply.outputs.exit_code }}
+        run: bash .github/scripts/s3-migration/run.sh classify
+
+      - name: Validate schema and records (read-only)
+        timeout-minutes: 4
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash .github/scripts/s3-migration/run.sh validate
+
+      - name: S1, S2 and S3 pgTAP suites (rolled back)
+        timeout-minutes: 18
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: bash .github/scripts/s3-migration/run.sh tests
+
+      - name: Summary
+        if: always()
+        timeout-minutes: 1
+        env:
+          JOB_STATUS: ${{ job.status }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          {
+            echo "## S3 migration: $JOB_STATUS"
+            echo
+            echo "Target: \`$EXPECTED_PROJECT_REF\` (willcriando, development). Commit: \`$COMMIT\`."
+            echo
+            cat "$RUNNER_TEMP/s3-migration/report.md" 2>/dev/null || echo "- No step reached the database."
+            if [ "$JOB_STATUS" != "success" ]; then
+              echo
+              echo "**Stopped.** See the first FAILED line. Nothing was retried or repaired."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"

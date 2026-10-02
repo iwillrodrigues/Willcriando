@@ -7,7 +7,7 @@ A web product that helps an individual advertising creative turn an arbitrary br
 | Area | State |
 |---|---|
 | Next.js application (App Router, TypeScript strict) | Accounts, jobs, immutable briefing revisions (S1); AI analysis, path recommendations, catalog explorer, manual and random selection, concept generation and editing, finalists, editable presentation (S2) |
-| Database (`supabase/`) | Migrations for pgTAP, S1 and S2, applied to the hosted development project; S3 migration (not applied yet); pgTAP tests for S1, S2 and S3 |
+| Database (`supabase/`) | Migrations for pgTAP, S1 and S2, applied to the hosted development project; S3 migration (not applied yet; applied by the manual `s3-migration` workflow); pgTAP tests for S1, S2 and S3 |
 | S3 refinements | Reversible concept dismissal, immutable saved presentation versions with full-text copy, permanent owner-only job deletion |
 | AI (`lib/ai/`) | Anthropic Messages API with structured output, validated again with Zod; server-only |
 | Catalog import (`scripts/import-catalog.ts`) | Notion → Supabase snapshot of exactly 67 paths, all-or-nothing validation |
@@ -99,6 +99,18 @@ Migration `20261002120000_s3_dismissal_versions_deletion.sql`, tests in `supabas
 1. **Dismissal.** `concepts.dismissed_at` (null means active). `set_concept_dismissed` dismisses or restores a concept of the caller's job; repeating either is a no-op. A check constraint keeps a concept from being a finalist and dismissed at once: a finalist must be taken out of the finalists first. Content and provenance never change.
 2. **Presentation versions.** The generated presentation is an editable draft. `save_presentation_version` (“Guardar apresentação”) appends a row to `presentation_versions` with the structured content, the finalist titles as they read then, and the complete text rendered once by the database. Rows are never updated; each save is a new version, numbered per job. Existing presentations stay drafts; no version is created for them.
 3. **Job deletion.** `delete_job` checks ownership, locks the job and its generation requests, and deletes every job-owned row and the job in one transaction. Job-owned rows stay undeletable everywhere else: their delete triggers allow a delete only for the job that `delete_job` is deleting in the same transaction (a marker in `private.job_deletions`, unreachable by API roles). Catalog rows are never touched.
+
+Applying S3 to the development project: the manual workflow `.github/workflows/s3-migration.yml` (Actions → "S3 migration (willcriando dev)" → Run workflow, type `anhaonrifwakoekksopv`) applies this migration to `anhaonrifwakoekksopv` only, with Supabase CLI 2.119.0 (`supabase db push`), so the hosted history records version `20261002120000`. Steps, each failing closed, implemented in `.github/scripts/s3-migration/`:
+
+1. Source: HEAD descends from `476377b3ed19c168ea95326ac2e1c64d79df094c`, `supabase/` is identical to it, the checkout is clean, and the migration's SHA256 is `135152c4d48849b61a134c379cd8b785fd05281951180c314a5a00c7e84b40e5`.
+2. Target: the connection string is a session-mode (port 5432) connection for `anhaonrifwakoekksopv`.
+3. Preflight, read-only: the hosted history is exactly the four prior migrations, no S3 object exists, the catalog has 67 paths, `supabase migration list` shows S3 as the only pending migration, and `supabase db push --dry-run` would push only S3. Row counts and content fingerprints are recorded.
+4. `supabase db push`, once. A failure or timeout is never retried.
+5. Read-only classification: applied (history has S3 exactly once and every S3 object exists), not applied (history and schema unchanged) or uncertain. Only "applied" continues.
+6. Read-only validation of the S3 schema, grants and policies, and of record preservation (same counts and fingerprints as before; no presentation version is created).
+7. The S1, S2 and S3 pgTAP files (41, 71 and 66 tests), each one transaction that rolls back, then a check that no record changed.
+
+Required secret (repository or `willcriando-dev` environment): `SUPABASE_DB_URL`, the willcriando session pooler connection string (Dashboard → Connect → Session pooler, port 5432, user `postgres.anhaonrifwakoekksopv`, with the database password). GitHub runners have no IPv6, so the direct `db.anhaonrifwakoekksopv.supabase.co` host usually cannot be reached from them. No Supabase access token is needed. The workflow deploys nothing.
 
 ## Catalog import (S2)
 
