@@ -238,7 +238,8 @@ insert into tap(line) select extensions.is(
 
 insert into tap(line) select extensions.throws_ok(
   $q$ select public.select_path(current_setting('trilha.job_a')::uuid, 'random',
-        (select id from public.creative_paths where id <> current_setting('trilha.draw_path')::uuid limit 1),
+        (select id from public.creative_paths where id <> current_setting('trilha.draw_path')::uuid
+           and snapshot_id = current_setting('trilha.snapshot')::uuid and selectable limit 1),
         null, current_setting('trilha.draw')::uuid) $q$,
   '22023', 'TRILHA_INVALID_SELECTION', 'a random selection must use the drawn path');
 
@@ -453,7 +454,8 @@ insert into tap(line) select extensions.ok(
 -- 6. Editing, finalists and presentation
 -- ---------------------------------------------------------------------------
 
-select set_config('trilha.concept1', (select id::text from public.concepts where seq = 1), true);
+select set_config('trilha.concept1', (select id::text from public.concepts
+  where job_id = current_setting('trilha.job_a')::uuid and seq = 1), true);
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000000a","role":"authenticated"}', true);
 set local role authenticated;
 
@@ -555,7 +557,8 @@ select current_setting('trilha.job_a')::uuid, 'manual', p.id,
 from public.creative_paths p
 where p.editorial_code = '23' and p.snapshot_id = current_setting('trilha.snapshot')::uuid;
 select set_config('trilha.sel_header',
-  (select id::text from public.path_selections order by choice_order desc limit 1), true);
+  (select id::text from public.path_selections where job_id = current_setting('trilha.job_a')::uuid
+   order by choice_order desc limit 1), true);
 
 set local role service_role;
 insert into tap(line) select extensions.throws_ok(

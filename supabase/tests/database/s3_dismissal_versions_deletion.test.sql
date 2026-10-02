@@ -192,7 +192,8 @@ insert into tap(line) select extensions.ok(
   'concepts.dismissed_at is nullable with no default, so existing concepts stay active');
 
 insert into tap(line) select extensions.is(
-  (select count(*)::int from public.concepts where dismissed_at is not null), 0,
+  (select count(*)::int from public.concepts where dismissed_at is not null
+    and job_id in (current_setting('trilha.job_a1')::uuid, current_setting('trilha.job_a2')::uuid, current_setting('trilha.job_b1')::uuid)), 0,
   'generated concepts start active');
 
 -- ---------------------------------------------------------------------------
@@ -269,7 +270,7 @@ insert into tap(line) select extensions.throws_ok(
 -- A later generation round leaves the dismissal alone.
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-4000-8000-00000000000a","role":"authenticated"}', true);
 select set_config('trilha.sel_new', (public.select_path(current_setting('trilha.job_a1')::uuid, 'manual',
-  (select id from public.creative_paths where editorial_code = '7'))).id::text, true);
+  (select id from public.creative_paths where editorial_code = '7' and snapshot_id = current_setting('trilha.snapshot')::uuid))).id::text, true);
 select set_config('request.jwt.claims', '', true);
 select set_config('trilha.req_new', (select request_id::text from public.begin_generation('00000000-0000-4000-8000-00000000000a',
   current_setting('trilha.job_a1')::uuid, 'concepts', 'modelo-teste', 'v1', current_setting('trilha.sel_new')::uuid)), true);
