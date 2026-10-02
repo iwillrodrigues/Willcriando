@@ -86,6 +86,7 @@ export async function generateStructured<W extends z.ZodType, S extends z.ZodTyp
       messages: [{ role: "user", content: input.user }],
     });
   } catch (error) {
+    logProviderFailure(error);
     throw new AiError(mapProviderError(error));
   }
 
@@ -96,6 +97,52 @@ export async function generateStructured<W extends z.ZodType, S extends z.ZodTyp
   const checked = input.strict.safeParse(response.parsed_output);
   if (!checked.success) throw new AiError("AI_INVALID_OUTPUT");
   return { value: checked.data, servedModel: response.model };
+}
+
+const MAX_LOGGED_MESSAGE = 500;
+
+function clip(value: unknown): string | null {
+  return typeof value === "string" && value ? value.slice(0, MAX_LOGGED_MESSAGE) : null;
+}
+
+/**
+ * Safe diagnostic fields for a failed provider call, or null when there is
+ * nothing to log. Only status, error type, error message and request id are
+ * kept: never headers, the request (prompt, briefing) or the full body.
+ * Errors the SDK raises after a response arrives (output parsing) are left
+ * out, because their messages can quote the model's output.
+ */
+export function providerFailureLog(error: unknown): Record<string, string | number | null> | null {
+  if (!(error instanceof Anthropic.APIError)) return null;
+
+  if (error.status === undefined) {
+    // Thrown before any response (network, timeout, abort). Explicit names,
+    // because bundling can minify class names.
+    const name =
+      error instanceof Anthropic.APIConnectionTimeoutError
+        ? "APIConnectionTimeoutError"
+        : error instanceof Anthropic.APIConnectionError
+          ? "APIConnectionError"
+          : error instanceof Anthropic.APIUserAbortError
+            ? "APIUserAbortError"
+            : "APIError";
+    return { event: "anthropic_request_threw", error_name: name, error_message: clip(error.message) };
+  }
+
+  // Body shape: { type: "error", error: { type, message }, request_id }.
+  const body = (error.error ?? null) as { error?: { type?: unknown; message?: unknown }; request_id?: unknown } | null;
+  return {
+    event: "anthropic_request_failed",
+    status: error.status,
+    error_type: clip(error.type) ?? clip(body?.error?.type),
+    error_message: clip(body?.error?.message),
+    request_id: clip(error.requestID) ?? clip(body?.request_id),
+  };
+}
+
+function logProviderFailure(error: unknown): void {
+  const fields = providerFailureLog(error);
+  if (fields) console.error(JSON.stringify(fields));
 }
 
 function mapProviderError(error: unknown): AiErrorCode {
