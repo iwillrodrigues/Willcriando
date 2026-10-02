@@ -27,7 +27,7 @@ export function authErrorMessage(code: string | undefined | null): string {
   return GENERIC_ERROR;
 }
 
-/** Error keys raised by the S1 database functions (see the S1 migration). */
+/** Error keys raised by the database functions (see the migrations). */
 const DB_MESSAGES: Record<string, string> = {
   TRILHA_UNAUTHENTICATED: "Sua sessão expirou. Entre novamente.",
   TRILHA_JOB_NOT_FOUND: "Job não encontrado ou sem acesso.",
@@ -43,6 +43,8 @@ const DB_MESSAGES: Record<string, string> = {
   TRILHA_INVALID_RETRY: "Esta tentativa não pode ser repetida. Recarregue a página.",
   TRILHA_CONCEPT_NOT_FOUND: "Conceito não encontrado ou sem acesso.",
   TRILHA_PRESENTATION_NOT_FOUND: "Apresentação não encontrada ou sem acesso.",
+  TRILHA_CONCEPT_IS_FINALIST: "Tire este conceito dos finalistas antes de descartar.",
+  TRILHA_CONCEPT_DISMISSED: "Restaure este conceito antes de marcá-lo como finalista.",
 };
 
 /** Codes stored on failed generation requests, and pre-flight failures. */

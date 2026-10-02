@@ -54,3 +54,32 @@ export async function saveBriefing(_prev: SaveBriefingState, formData: FormData)
   revalidatePath("/jobs");
   return { status: "saved", revisionNumber: data.revision_number, savedAt: data.created_at };
 }
+
+export type DeleteJobState = { status: "idle" | "error"; message?: string };
+
+/**
+ * Permanently deletes one of the user's jobs. The form must carry the
+ * confirmation field that only the confirmation step sends. The database
+ * function checks ownership and deletes the whole job graph in one
+ * transaction, so a failure deletes nothing.
+ */
+export async function deleteJob(_prev: DeleteJobState, formData: FormData): Promise<DeleteJobState> {
+  await requireUser("/jobs");
+  const jobId = String(formData.get("jobId") ?? "");
+  if (!jobIdSchema.safeParse(jobId).success) return { status: "error", message: "Job não encontrado ou sem acesso." };
+  if (formData.get("confirm") !== "excluir") return { status: "error", message: "Confirme a exclusão para continuar." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("delete_job", { p_job_id: jobId });
+  if (error) {
+    if (error.message?.trim() === "TRILHA_JOB_NOT_FOUND") {
+      revalidatePath("/jobs");
+      return { status: "error", message: "Este job já foi excluído ou não está acessível. Atualize a página." };
+    }
+    return { status: "error", message: `Não foi possível excluir o job. Nada foi apagado. ${dbErrorMessage(error)}` };
+  }
+
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${jobId}`);
+  redirect("/jobs?excluido=1");
+}

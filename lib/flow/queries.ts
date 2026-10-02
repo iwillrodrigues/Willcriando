@@ -98,6 +98,8 @@ export type Concept = {
   body: string;
   edited_at: string | null;
   is_finalist: boolean;
+  /** Null while active; set when the owner dismissed the concept. */
+  dismissed_at: string | null;
   created_at: string;
   path_title: string | null;
 };
@@ -112,6 +114,14 @@ export type Presentation = {
   request: RequestSummary;
 };
 
+/** A saved, immutable presentation version. full_text is the stored snapshot. */
+export type PresentationVersion = {
+  id: string;
+  version_number: number;
+  full_text: string;
+  created_at: string;
+};
+
 export type JobFlow = {
   job: JobDetail;
   analysis: Analysis | null;
@@ -122,6 +132,8 @@ export type JobFlow = {
   finalists: Concept[];
   presentation: Presentation | null;
   presentationRequest: RequestSummary | null;
+  /** Newest first. */
+  presentationVersions: PresentationVersion[];
 };
 
 const REQUEST_COLUMNS = "id, status, error_code, model, served_model, prompt_version, created_at, completed_at";
@@ -238,7 +250,7 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
   const { data: conceptRows, error: conceptsError } = await supabase
     .from("concepts")
     .select(
-      "id, generation_request_id, selection_id, seq, ai_title, ai_line, ai_body, title, line, body, edited_at, is_finalist, created_at, creative_paths (title)",
+      "id, generation_request_id, selection_id, seq, ai_title, ai_line, ai_body, title, line, body, edited_at, is_finalist, dismissed_at, created_at, creative_paths (title)",
     )
     .eq("job_id", jobId)
     .order("created_at", { ascending: false })
@@ -284,6 +296,14 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
     };
   }
 
+  // Saved versions are read as stored; nothing is rebuilt from current job data.
+  const { data: versionRows, error: versionsError } = await supabase
+    .from("presentation_versions")
+    .select("id, version_number, full_text, created_at")
+    .eq("job_id", jobId)
+    .order("version_number", { ascending: false });
+  if (versionsError) throw new DataAccessError();
+
   return {
     job,
     analysis,
@@ -294,6 +314,7 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
     finalists,
     presentation,
     presentationRequest: presReq as RequestSummary | null,
+    presentationVersions: (versionRows ?? []) as PresentationVersion[],
   };
 }
 

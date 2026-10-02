@@ -88,6 +88,15 @@ describe("server-only modules", () => {
   });
 });
 
+describe("job deletion", () => {
+  it("deletes only through the delete_job database function, never table by table", () => {
+    const tableDeletes = sourceFiles.filter((file) => /\.delete\s*\(/.test(read(file))).map(rel);
+    expect(tableDeletes).toEqual([]);
+    const callers = sourceFiles.filter((file) => read(file).includes('rpc("delete_job"')).map(rel);
+    expect(callers).toEqual(["app/jobs/actions.ts"]);
+  });
+});
+
 describe("migrations", () => {
   const migrations = walk(join(root, "supabase", "migrations"), [".sql"]).map(read).join("\n");
 

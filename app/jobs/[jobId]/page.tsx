@@ -11,7 +11,7 @@ import { formatDateTime } from "@/lib/format";
 import styles from "../../ui.module.css";
 import { BriefingForm } from "./briefing-form";
 import { analyzeBriefing, generateConcepts, generatePresentation } from "./flow-actions";
-import { ConceptCard, GenerateForm, PresentationEditor, SelectPathForm } from "./flow-forms";
+import { ConceptCard, CopyTextButton, DismissedConceptCard, GenerateForm, PresentationEditor, SelectPathForm } from "./flow-forms";
 
 export const metadata: Metadata = { title: "Job · Trilha" };
 
@@ -42,9 +42,12 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
   if (!flow) notFound();
   const catalog = await getCurrentCatalog();
 
-  const { job, analysis, analysisRequest, selection, conceptRequest, concepts, finalists, presentation, presentationRequest } = flow;
+  const { job, analysis, analysisRequest, selection, conceptRequest, concepts, finalists, presentation, presentationRequest, presentationVersions } =
+    flow;
   const revision = job.currentRevision;
   const conceptTitles = Object.fromEntries(concepts.map((c) => [c.id, c.title]));
+  const activeConcepts = concepts.filter((c) => c.dismissed_at == null);
+  const dismissedConcepts = concepts.filter((c) => c.dismissed_at != null);
   const staleSelection = selection && revision && selection.briefing_revision_id !== revision.id;
   const pendingAnalysis = analysisRequest?.status === "pending";
 
@@ -225,9 +228,11 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
 
         {concepts.length === 0 ? (
           <p className={styles.muted}>Nenhum conceito ainda.</p>
+        ) : activeConcepts.length === 0 ? (
+          <p className={styles.notice}>Todos os conceitos foram descartados. Restaure algum em “Conceitos descartados”.</p>
         ) : (
           <div className={styles.stack}>
-            {concepts.map((concept) => (
+            {activeConcepts.map((concept) => (
               <ConceptCard
                 key={concept.id}
                 jobId={job.id}
@@ -236,6 +241,20 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
               />
             ))}
           </div>
+        )}
+
+        {dismissedConcepts.length > 0 && (
+          <details className={styles.details}>
+            <summary>
+              Conceitos descartados ({dismissedConcepts.length})
+            </summary>
+            <p className={styles.muted}>Ficam guardados como foram gerados. Restaure para voltar à lista.</p>
+            <div className={styles.stack}>
+              {dismissedConcepts.map((concept) => (
+                <DismissedConceptCard key={concept.id} jobId={job.id} concept={concept} pathTitle={concept.path_title} />
+              ))}
+            </div>
+          </details>
         )}
       </section>
 
@@ -260,21 +279,48 @@ export default async function JobPage(props: PageProps<"/jobs/[jobId]">) {
         )}
         {presentation ? (
           <>
+            <h3 className={styles.sectionTitle}>Rascunho</h3>
             <div className={styles.row}>
               <span className={`${styles.badge} ${styles.badgeAi}`}>Gerado por IA</span>
               {presentation.edited_at && <span className={`${styles.badge} ${styles.badgeUser}`}>Editado por você</span>}
             </div>
             <Provenance request={presentation.request} />
             <PresentationEditor
-              key={`${presentation.id}-${presentation.edited_at ?? ""}`}
+              key={presentation.id}
               jobId={job.id}
               presentationId={presentation.id}
               content={presentation.content}
+              editedAt={presentation.edited_at}
               conceptTitles={conceptTitles}
             />
           </>
         ) : (
           <p className={styles.muted}>Nenhuma apresentação ainda.</p>
+        )}
+
+        <h3 className={styles.sectionTitle} id="versoes">
+          Versões guardadas
+        </h3>
+        {presentationVersions.length === 0 ? (
+          <p className={styles.muted}>
+            {presentation ? "Nenhuma versão guardada ainda. O rascunho acima só vira versão quando você guarda." : "Nenhuma versão guardada ainda."}
+          </p>
+        ) : (
+          <ol className={styles.list} aria-labelledby="versoes">
+            {presentationVersions.map((version) => (
+              <li key={version.id} className={styles.item}>
+                <div className={styles.row}>
+                  <strong>Versão {version.version_number}</strong>
+                  <span className={styles.muted}>Guardada em {formatDateTime(version.created_at)}</span>
+                </div>
+                <CopyTextButton text={version.full_text} label="Copiar texto completo" />
+                <details className={styles.details}>
+                  <summary>Ler versão {version.version_number}</summary>
+                  <p className={styles.prose}>{version.full_text}</p>
+                </details>
+              </li>
+            ))}
+          </ol>
         )}
       </section>
     </main>

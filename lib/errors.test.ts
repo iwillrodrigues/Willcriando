@@ -28,6 +28,11 @@ describe("database error messages", () => {
     expect(dbErrorMessage({ message: "TRILHA_INVALID_CONTENT", code: "22023" })).toMatch(/briefing/);
   });
 
+  it("maps the S3 dismissal error keys", () => {
+    expect(dbErrorMessage({ message: "TRILHA_CONCEPT_IS_FINALIST", code: "22023" })).toMatch(/finalistas antes de descartar/);
+    expect(dbErrorMessage({ message: "TRILHA_CONCEPT_DISMISSED", code: "22023" })).toMatch(/Restaure/);
+  });
+
   it("never echoes raw database messages", () => {
     const raw = { message: 'duplicate key value violates unique constraint "x" detail secret', code: "XX000" };
     expect(dbErrorMessage(raw)).toBe(GENERIC_ERROR);

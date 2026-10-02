@@ -7,7 +7,8 @@ A web product that helps an individual advertising creative turn an arbitrary br
 | Area | State |
 |---|---|
 | Next.js application (App Router, TypeScript strict) | Accounts, jobs, immutable briefing revisions (S1); AI analysis, path recommendations, catalog explorer, manual and random selection, concept generation and editing, finalists, editable presentation (S2) |
-| Database (`supabase/`) | Migrations for pgTAP, S1 and S2, applied to the hosted development project; pgTAP tests for both |
+| Database (`supabase/`) | Migrations for pgTAP, S1 and S2, applied to the hosted development project; S3 migration (not applied yet); pgTAP tests for S1, S2 and S3 |
+| S3 refinements | Reversible concept dismissal, immutable saved presentation versions with full-text copy, permanent owner-only job deletion |
 | AI (`lib/ai/`) | Anthropic Messages API with structured output, validated again with Zod; server-only |
 | Catalog import (`scripts/import-catalog.ts`) | Notion → Supabase snapshot of exactly 67 paths, all-or-nothing validation |
 | Environment handling | `lib/env/`: Zod schemas, a server-only module for secrets, validation on use, unit tests |
@@ -90,6 +91,14 @@ Access rules (enforced by the database):
 1. A user sees and changes only their own jobs.
 2. Briefing revisions are append-only; they are written only through `save_briefing_revision`, which checks ownership and numbers revisions under a row lock.
 3. The `anon` role has no access to application tables or functions.
+
+## Dismissal, presentation versions and job deletion (S3)
+
+Migration `20261002120000_s3_dismissal_versions_deletion.sql`, tests in `supabase/tests/database/s3_dismissal_versions_deletion.test.sql`.
+
+1. **Dismissal.** `concepts.dismissed_at` (null means active). `set_concept_dismissed` dismisses or restores a concept of the caller's job; repeating either is a no-op. A check constraint keeps a concept from being a finalist and dismissed at once: a finalist must be taken out of the finalists first. Content and provenance never change.
+2. **Presentation versions.** The generated presentation is an editable draft. `save_presentation_version` (“Guardar apresentação”) appends a row to `presentation_versions` with the structured content, the finalist titles as they read then, and the complete text rendered once by the database. Rows are never updated; each save is a new version, numbered per job. Existing presentations stay drafts; no version is created for them.
+3. **Job deletion.** `delete_job` checks ownership, locks the job and its generation requests, and deletes every job-owned row and the job in one transaction. Job-owned rows stay undeletable everywhere else: their delete triggers allow a delete only for the job that `delete_job` is deleting in the same transaction (a marker in `private.job_deletions`, unreachable by API roles). Catalog rows are never touched.
 
 ## Catalog import (S2)
 

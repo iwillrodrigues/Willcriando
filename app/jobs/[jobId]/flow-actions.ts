@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { conceptFieldsSchema, presentationContentSchema } from "@/lib/ai/schemas";
+import { conceptFieldsSchema, presentationContentSchema, type PresentationContent } from "@/lib/ai/schemas";
 import { requireUser } from "@/lib/auth/session";
 import { dbErrorMessage, generationErrorMessage, isConfigurationError } from "@/lib/errors";
 import { runGeneration, type GenerationKind } from "@/lib/flow/generation";
@@ -168,13 +168,34 @@ export async function setFinalist(_prev: FlowActionState, formData: FormData): P
   return { status: "done" };
 }
 
-export async function savePresentation(_prev: FlowActionState, formData: FormData): Promise<FlowActionState> {
+export async function setConceptDismissed(_prev: FlowActionState, formData: FormData): Promise<FlowActionState> {
   const jobId = field(formData, "jobId");
   await requireUser(jobPath(jobId));
+  const parsed = z
+    .object({ jobId: uuid, conceptId: uuid, value: z.enum(["true", "false"]) })
+    .safeParse({ jobId, conceptId: field(formData, "conceptId"), value: field(formData, "value") });
+  if (!parsed.success) return { status: "error", message: "Conceito não encontrado ou sem acesso." };
+
+  // The database checks ownership and refuses to dismiss a finalist.
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("set_concept_dismissed", {
+    p_concept_id: parsed.data.conceptId,
+    p_dismissed: parsed.data.value === "true",
+  });
+  if (error) return { status: "error", message: dbErrorMessage(error) };
+  revalidatePath(jobPath(parsed.data.jobId));
+  return { status: "done" };
+}
+
+type PresentationForm =
+  | { ok: true; jobId: string; presentationId: string; content: PresentationContent }
+  | { ok: false; state: FlowActionState };
+
+function presentationFromForm(formData: FormData): PresentationForm {
   const ids = z
     .object({ jobId: uuid, presentationId: uuid })
-    .safeParse({ jobId, presentationId: field(formData, "presentationId") });
-  if (!ids.success) return { status: "error", message: "Apresentação não encontrada ou sem acesso." };
+    .safeParse({ jobId: field(formData, "jobId"), presentationId: field(formData, "presentationId") });
+  if (!ids.success) return { ok: false, state: { status: "error", message: "Apresentação não encontrada ou sem acesso." } };
 
   const conceptIds = formData.getAll("slideConceptId").map(String);
   const content = presentationContentSchema.safeParse({
@@ -187,14 +208,45 @@ export async function savePresentation(_prev: FlowActionState, formData: FormDat
     })),
     closing: field(formData, "closing"),
   });
-  if (!content.success) return { status: "error", message: "Preencha todos os campos da apresentação." };
+  if (!content.success) return { ok: false, state: { status: "error", message: "Preencha todos os campos da apresentação." } };
+  return { ok: true, ...ids.data, content: content.data };
+}
+
+/** Saves the editable draft in place. It is not a version. */
+export async function savePresentation(_prev: FlowActionState, formData: FormData): Promise<FlowActionState> {
+  await requireUser(jobPath(field(formData, "jobId")));
+  const form = presentationFromForm(formData);
+  if (!form.ok) return form.state;
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.rpc("update_presentation", {
-    p_presentation_id: ids.data.presentationId,
-    p_content: content.data,
+    p_presentation_id: form.presentationId,
+    p_content: form.content,
   });
   if (error) return { status: "error", message: dbErrorMessage(error) };
-  revalidatePath(jobPath(ids.data.jobId));
-  return { status: "done", message: "Apresentação salva." };
+  revalidatePath(jobPath(form.jobId));
+  return { status: "done", message: "Rascunho salvo." };
+}
+
+/**
+ * Saves what the owner is looking at as a new immutable version (the draft
+ * is updated to the same content in the same transaction). Every click is a
+ * new version; nothing is overwritten or deduplicated.
+ */
+export async function savePresentationVersion(_prev: FlowActionState, formData: FormData): Promise<FlowActionState> {
+  await requireUser(jobPath(field(formData, "jobId")));
+  const form = presentationFromForm(formData);
+  if (!form.ok) return form.state;
+
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .rpc("save_presentation_version", { p_presentation_id: form.presentationId, p_content: form.content })
+    .single<{ version_number: number }>();
+  if (error || !data) {
+    const invalid = error?.message?.trim() === "TRILHA_INVALID_CONTENT";
+    return { status: "error", message: invalid ? "Confira os campos da apresentação e tente de novo." : dbErrorMessage(error) };
+  }
+  revalidatePath(jobPath(form.jobId));
+  revalidatePath("/jobs");
+  return { status: "done", message: `Versão ${data.version_number} guardada.` };
 }
