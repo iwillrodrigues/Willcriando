@@ -3,16 +3,23 @@
 # mismatch prints an ::error annotation and exits non-zero.
 #
 #   run.sh source      exact source commit, clean checkout, migration path and SHA256
-#   run.sh target      SUPABASE_DB_URL points at project anhaonrifwakoekksopv (prints nothing from it)
+#   run.sh target      SUPABASE_DB_URL is the approved session pooler of anhaonrifwakoekksopv (check_db_url.py)
+#   run.sh telemetry   CLI telemetry disabled and verified
 #   run.sh preflight   read-only: history, schema state, catalog, CLI list and dry run, record snapshot
 #   run.sh apply       supabase db push, exactly once, no retry
-#   run.sh classify    read-only: applied, not applied or uncertain
+#   run.sh classify    read-only: applied, not applied or uncertain; waits, bounded, for
+#                      any session that may still be running the push
 #   run.sh validate    read-only: S3 schema checks and record preservation
 #   run.sh tests       S1, S2 and S3 pgTAP files, each one transaction that rolls back
 #
 # SUPABASE_DB_URL is read from the environment only and never printed. Work
 # files go to $RUNNER_TEMP/s3-migration; result lines for the job summary go
 # to report.md there.
+#
+# Timing defaults are the workflow's values. PUSH_TIMEOUT_SECONDS,
+# CLASSIFY_BUDGET_SECONDS, CLASSIFY_INTERVAL_SECONDS and
+# CLASSIFY_STABLE_OBSERVATIONS may only tighten them within fixed bounds; they
+# exist for local rehearsal and are not set by the workflow.
 set -euo pipefail
 
 SOURCE_COMMIT=476377b3ed19c168ea95326ac2e1c64d79df094c
@@ -39,10 +46,36 @@ work="${RUNNER_TEMP:?}/s3-migration"
 mkdir -p "$work"
 report="$work/report.md"
 
+step="${1:?subcommand}"
+# The job log: annotations go here even from redirected calls and subshells.
+exec 3>&1
+
 fail() {
-  echo "::error title=S3 migration ($step)::$1"
+  echo "::error title=S3 migration ($step)::$1" >&3
   echo "- **$step: FAILED.** $1" >>"$report"
   exit 1
+}
+# Integer setting from the environment, default when unset, within [min, max].
+bounded() {
+  local value="${!1:-$2}"
+  [[ "$value" =~ ^[0-9]+$ ]] && [ "$value" -ge "$3" ] && [ "$value" -le "$4" ] ||
+    fail "$1 must be an integer between $3 and $4."
+  echo "$value"
+}
+# libpq and pgx read these as defaults or overrides; none may be set.
+pg_env_guard() {
+  local name
+  for name in PGHOST PGHOSTADDR PGPORT PGDATABASE PGUSER PGPASSWORD PGPASSFILE PGSERVICE PGSERVICEFILE \
+    PGOPTIONS PGSYSCONFDIR PGTARGETSESSIONATTRS PGREQUIREAUTH PGSSLNEGOTIATION PGLOADBALANCEHOSTS PGAPPNAME; do
+    [ -z "${!name:-}" ] || fail "environment variable $name is set; it could redirect the connection."
+  done
+  [ "${PGSSLMODE:-require}" = "require" ] || fail "PGSSLMODE must be require."
+}
+telemetry_guard() {
+  [ "${SUPABASE_TELEMETRY_DISABLED:-}" = "1" ] && [ "${DO_NOT_TRACK:-}" = "1" ] && [ -z "${SUPABASE_HOME:-}" ] ||
+    fail "SUPABASE_TELEMETRY_DISABLED=1 and DO_NOT_TRACK=1 must be set and SUPABASE_HOME unset."
+  jq -e '.enabled == false' "$HOME/.supabase/telemetry.json" >/dev/null 2>&1 ||
+    fail "CLI telemetry is not recorded as disabled in $HOME/.supabase/telemetry.json."
 }
 note() {
   echo "$1"
@@ -50,16 +83,25 @@ note() {
 }
 # Read-only SQL files open "begin transaction read only" and end with rollback.
 psql_file() {
-  PGCONNECT_TIMEOUT=15 timeout "${2:-120}" psql "${SUPABASE_DB_URL:?}" -X -q -At -v ON_ERROR_STOP=1 -f "$1"
+  pg_env_guard
+  PGCONNECT_TIMEOUT=15 timeout --kill-after=10 "${2:-120}" psql "${SUPABASE_DB_URL:?}" -X -q -At -v ON_ERROR_STOP=1 -f "$1"
 }
 history() { psql_file "$here/history.sql"; }
 s3_state() { psql_file "$here/state.sql"; }
+sessions() { psql_file "$here/sessions.sql" 60; }
 snapshot() { psql_file "$here/snapshot.sql" >"$work/snapshot-$1.txt"; }
 supabase_cli() {
-  timeout "$1" supabase "${@:2}" --db-url "${SUPABASE_DB_URL:?}" --output-format json --agent no
+  pg_env_guard
+  telemetry_guard
+  timeout --kill-after=15 "$1" supabase "${@:2}" --db-url "${SUPABASE_DB_URL:?}" --output-format json --agent no
 }
 
-step="${1:?subcommand}"
+# Database steps refuse redirecting PG* variables up front, in this shell, so
+# a refusal stops the step at once instead of surfacing as failed reads.
+case "$step" in
+preflight | apply | classify | validate | tests) pg_env_guard ;;
+esac
+
 case "$step" in
 source)
   [ "$(git rev-parse HEAD)" = "${EXPECTED_HEAD:?}" ] || fail "checked out HEAD is not the dispatched commit."
@@ -76,38 +118,23 @@ source)
   ;;
 
 target)
-  [ -n "${SUPABASE_DB_URL//[[:space:]]/}" ] || fail "repository secret SUPABASE_DB_URL is not set."
-  # Accepts the session pooler (user postgres.<ref>, *.pooler.supabase.com:5432) or
-  # the direct host (user postgres, db.<ref>.supabase.co:5432), database postgres.
-  # Masks the password and prints only pass/fail.
-  PROJECT_REF="$PROJECT_REF" python3 - <<'PY' || fail "SUPABASE_DB_URL is not a session-mode (port 5432) connection string for project $PROJECT_REF."
-import os, sys
-from urllib.parse import urlsplit, parse_qs, unquote
-ref = os.environ["PROJECT_REF"]
-raw = os.environ["SUPABASE_DB_URL"].strip()
-try:
-    u = urlsplit(raw)
-except ValueError:
-    sys.exit(1)
-pw = u.password or ""
-for value in {pw, unquote(pw)}:
-    if value:
-        print(f"::add-mask::{value}")
-try:
-    port = u.port
-except ValueError:
-    sys.exit(1)
-host = (u.hostname or "").lower()
-user = unquote(u.username or "")
-query = parse_qs(u.query, keep_blank_values=True)
-pooler = host.endswith(".pooler.supabase.com") and user == f"postgres.{ref}"
-direct = host == f"db.{ref}.supabase.co" and user == "postgres"
-ok = (u.scheme in ("postgresql", "postgres") and (pooler or direct) and port == 5432 and bool(pw)
-      and u.path == "/postgres" and not u.fragment
-      and set(query) <= {"sslmode"} and query.get("sslmode", ["require"]) in (["require"], ["verify-full"]))
-sys.exit(0 if ok else 1)
-PY
-  note "Target: SUPABASE_DB_URL is a session-mode connection for project \`$PROJECT_REF\` (value not printed)."
+  # Masks password candidates first, then accepts exactly one raw form and
+  # requires urllib and libpq to read it identically. Prints only a reason code.
+  python3 "$here/check_db_url.py" ||
+    fail "SUPABASE_DB_URL is not exactly the approved session-pooler connection string for $PROJECT_REF (see the reason code above)."
+  note "Target: SUPABASE_DB_URL is the approved session pooler for \`$PROJECT_REF\` (port 5432, database postgres, sslmode=require); urllib and libpq agree (value not printed)."
+  ;;
+
+telemetry)
+  [ "${SUPABASE_TELEMETRY_DISABLED:-}" = "1" ] && [ "${DO_NOT_TRACK:-}" = "1" ] && [ -z "${SUPABASE_HOME:-}" ] ||
+    fail "SUPABASE_TELEMETRY_DISABLED=1 and DO_NOT_TRACK=1 must be set and SUPABASE_HOME unset."
+  [ "$(supabase --version)" = "${SUPABASE_CLI_VERSION:?}" ] || fail "Supabase CLI is not version $SUPABASE_CLI_VERSION."
+  out=$(timeout --kill-after=5 30 supabase telemetry disable) || fail "supabase telemetry disable failed."
+  [ "$out" = "Telemetry is disabled." ] || fail "supabase telemetry disable did not confirm."
+  out=$(timeout --kill-after=5 30 supabase telemetry status) || fail "supabase telemetry status failed."
+  [ "$out" = "Telemetry is disabled." ] || fail "supabase telemetry status does not report disabled."
+  telemetry_guard
+  note "Telemetry: disabled by environment (SUPABASE_TELEMETRY_DISABLED, DO_NOT_TRACK) and in CLI settings; status verified."
   ;;
 
 preflight)
@@ -123,6 +150,13 @@ preflight)
   state=$(s3_state) || fail "could not read the schema state."
   [ "$state" = "0" ] || fail "$state of $S3_OBJECTS S3 objects already exist; the database is not in the pre-S3 state."
   note "Schema: none of the $S3_OBJECTS S3 objects exist."
+
+  probe=$(sessions) || fail "could not read session visibility."
+  if [ "$(cut -d'|' -f1,2,4 <<<"$probe")" = "t|t|0" ]; then
+    note "Session visibility: full. A failed push can be classified as not applied once stable."
+  else
+    note "Session visibility: limited ($probe). A failed or interrupted push will be reported UNCERTAIN, never NOT APPLIED."
+  fi
 
   snapshot before || fail "could not record the pre-migration snapshot."
   paths=$(awk -F'|' '$1 == "creative_paths" {print $2}' "$work/snapshot-before.txt")
@@ -150,10 +184,11 @@ preflight)
   ;;
 
 apply)
-  # One attempt. A failure or timeout is never retried; classify decides what happened.
+  # One attempt. A failure, timeout or kill is never retried; classify decides what happened.
+  push_timeout=$(bounded PUSH_TIMEOUT_SECONDS 600 10 600)
   echo "attempted=true" >>"$GITHUB_OUTPUT"
   rc=0
-  supabase_cli 600 db push --yes >"$work/push.json" 2>"$work/push.err" || rc=$?
+  supabase_cli "$push_timeout" db push --yes >"$work/push.json" 2>"$work/push.err" || rc=$?
   echo "exit_code=$rc" >>"$GITHUB_OUTPUT"
   cat "$work/push.err"
   note "supabase db push ran once and exited with status $rc."
@@ -161,20 +196,79 @@ apply)
   ;;
 
 classify)
-  # Read-only. Never retries and never repairs.
-  after=$(history) || fail "could not read the hosted migration history after the push. Result UNCERTAIN; nothing was retried."
-  printf '%s\n' "$after" >"$work/history-after.txt"
-  state=$(s3_state) || fail "could not read the schema state after the push. Result UNCERTAIN; nothing was retried."
-  count=$(printf '%s\n' "$after" | grep -c "^$S3_VERSION|" || true)
-  note "Hosted history after: $(printf '%s' "$after" | paste -sd ' ' - | sed 's/|/ /g'). S3 objects present: $state of $S3_OBJECTS."
+  # Read-only, bounded, never retries, never terminates sessions, never repairs.
+  #   APPLIED      push exit 0, history = prior four + S3 exactly once, all S3 objects.
+  #   NOT APPLIED  only when every observation in a stable window shows the prior
+  #                history, no S3 object and no session that could still be running
+  #                the push, with full session visibility.
+  #   UNCERTAIN    everything else, including an applied state after a non-zero or
+  #                unknown exit, a partial state, insufficient visibility, read
+  #                errors, or relevant sessions still present at the deadline.
+  budget=$(bounded CLASSIFY_BUDGET_SECONDS 240 10 240)
+  interval=$(bounded CLASSIFY_INTERVAL_SECONDS 10 1 10)
+  needed=$(bounded CLASSIFY_STABLE_OBSERVATIONS 3 3 10)
+  exit_code="${PUSH_EXIT_CODE:-}"
+  [[ "$exit_code" =~ ^[0-9]+$ ]] || exit_code="unknown"
   expected_after=$(printf '%s\n%s' "$PRIOR_HISTORY" "$S3_VERSION|$S3_NAME")
-  if [ "${PUSH_EXIT_CODE:-}" = "0" ] && [ "$after" = "$expected_after" ] && [ "$state" = "$S3_OBJECTS" ]; then
+  uncertain() {
+    fail "Result: UNCERTAIN (push exit $exit_code). $1 Not retried, no session terminated, nothing repaired; inspect before any further action."
+  }
+
+  observe() {
+    after=$(history) || { after="unreadable"; return 1; }
+    state=$(s3_state) || { state="unreadable"; return 1; }
+    probe=$(sessions) || { probe="unreadable"; return 1; }
+  }
+
+  if [ "$exit_code" = "0" ]; then
+    observe || uncertain "Push exited 0 but history, schema or sessions could not be read."
+    printf '%s\n' "$after" >"$work/history-after.txt"
+    note "Hosted history after: $(printf '%s' "$after" | paste -sd ' ' - | sed 's/|/ /g'). S3 objects present: $state of $S3_OBJECTS."
+    [ "$after" = "$expected_after" ] && [ "$state" = "$S3_OBJECTS" ] ||
+      uncertain "Push exited 0 but history or schema does not show S3 applied exactly once."
     note "Result: APPLIED. \`$S3_VERSION $S3_NAME\` recorded exactly once; all $S3_OBJECTS S3 objects exist."
-  elif [ "$after" = "$PRIOR_HISTORY" ] && [ "$state" = "0" ]; then
-    fail "Result: NOT APPLIED (push exit ${PUSH_EXIT_CODE:-unknown}). History and schema are unchanged. Not retried."
-  else
-    fail "Result: UNCERTAIN (push exit ${PUSH_EXIT_CODE:-unknown}, S3 history rows $count, S3 objects $state of $S3_OBJECTS). Not retried, nothing repaired; inspect before any further action."
+    exit 0
   fi
+
+  after="unread"
+  state="unread"
+  probe="unread"
+  deadline=$((SECONDS + budget))
+  clean=0
+  clean_since=0
+  observations=0
+  while :; do
+    observations=$((observations + 1))
+    if ! observe; then
+      clean=0
+      echo "Observation $observations: a read-only query failed."
+    else
+      echo "Observation $observations: S3 history rows $(printf '%s\n' "$after" | grep -c "^$S3_VERSION|" || true), S3 objects $state of $S3_OBJECTS, sessions visible|own|relevant|hidden = $probe."
+      if [ "$after" = "$expected_after" ] && [ "$state" = "$S3_OBJECTS" ]; then
+        printf '%s\n' "$after" >"$work/history-after.txt"
+        uncertain "History and schema show S3 applied, but the push did not report success."
+      elif [ "$after" != "$PRIOR_HISTORY" ] || [ "$state" != "0" ]; then
+        printf '%s\n' "$after" >"$work/history-after.txt"
+        uncertain "Partial or unexpected state: history $(printf '%s' "$after" | cut -d'|' -f1 | paste -sd ' ' -), S3 objects $state of $S3_OBJECTS."
+      elif ! IFS='|' read -r visible own relevant hidden <<<"$probe" || [ "$visible" != "t" ] || [ "$own" != "t" ] ||
+        ! [[ "$relevant" =~ ^[0-9]+$ ]] || [ "$hidden" != "0" ]; then
+        uncertain "Session visibility is insufficient to rule out a running push (visible|own|relevant|hidden = $probe)."
+      elif [ "$relevant" != "0" ]; then
+        clean=0
+      else
+        [ "$clean" -eq 0 ] && clean_since=$SECONDS
+        clean=$((clean + 1))
+        if [ "$clean" -ge "$needed" ] && [ $((SECONDS - clean_since)) -ge $((interval * (needed - 1))) ]; then
+          printf '%s\n' "$after" >"$work/history-after.txt"
+          note "Hosted history after: $(printf '%s' "$after" | paste -sd ' ' - | sed 's/|/ /g'). S3 objects present: 0 of $S3_OBJECTS."
+          fail "Result: NOT APPLIED (push exit $exit_code). History and schema unchanged and no session could still be running the push, across $clean observations over $((SECONDS - clean_since)) s. Not retried."
+        fi
+      fi
+    fi
+    [ $((SECONDS + interval)) -le "$deadline" ] ||
+      uncertain "Could not establish a stable state within ${budget} s (last: history rows $(printf '%s\n' "$after" | grep -c "^$S3_VERSION|" || true) for S3, objects $state, sessions $probe)."
+    sleep "$interval"
+  done
   ;;
 
 validate)

@@ -6,12 +6,15 @@ name: S3 migration (willcriando dev)
 # Supabase CLI (`supabase db push`), once, then validates it and runs the S1, S2
 # and S3 pgTAP suites, each in a transaction that rolls back.
 #
-# Secret (repository or "willcriando-dev" environment): SUPABASE_DB_URL, the
-# session pooler connection string of willcriando (port 5432). It is given only
-# to the steps that connect, and never printed.
+# Secret (store it in the "willcriando-dev" environment only): SUPABASE_DB_URL,
+# exactly postgresql://postgres.anhaonrifwakoekksopv:<password>@aws-<n>-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
+# It is given only to the steps that connect, and never printed.
 #
 # Every gate fails closed. Nothing is retried, repaired or registered by hand.
 # No deployment happens here.
+#
+# GitHub dispatches workflow_dispatch only for workflows whose file exists on
+# the default branch. Until this reviewed file is there, it cannot be started.
 
 on:
   workflow_dispatch:
@@ -32,11 +35,16 @@ env:
   EXPECTED_PROJECT_REF: anhaonrifwakoekksopv
   SUPABASE_CLI_VERSION: 2.119.0
   PGSSLMODE: require
+  # Read by the pinned CLI before any telemetry call; the telemetry step also
+  # disables it in the CLI settings and verifies both.
+  SUPABASE_TELEMETRY_DISABLED: "1"
+  DO_NOT_TRACK: "1"
 
 jobs:
   migrate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Above the sum of the step timeouts, so a step limit always fires first.
+    timeout-minutes: 70
     environment: willcriando-dev
     steps:
       - name: Confirm target
@@ -49,6 +57,7 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
+        timeout-minutes: 3
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -60,6 +69,10 @@ jobs:
           EXPECTED_HEAD: ${{ github.sha }}
         run: bash .github/scripts/s3-migration/run.sh source
 
+      - name: Self-test the connection string check (offline, no secret)
+        timeout-minutes: 2
+        run: python3 .github/scripts/s3-migration/test_check_db_url.py
+
       - name: Verify target secret
         timeout-minutes: 2
         env:
@@ -68,12 +81,13 @@ jobs:
 
       # Pinned to the v1.7.3 commit: the CLI it installs later receives the database secret.
       - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        timeout-minutes: 3
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
 
-      - name: Disable CLI telemetry
-        timeout-minutes: 1
-        run: supabase telemetry disable || true
+      - name: Disable and verify CLI telemetry
+        timeout-minutes: 2
+        run: bash .github/scripts/s3-migration/run.sh telemetry
 
       - name: Preflight (read-only)
         timeout-minutes: 6
@@ -81,7 +95,8 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: bash .github/scripts/s3-migration/run.sh preflight
 
-      # The only write. Runs once; a failure or timeout is classified below, never retried.
+      # The only write. Runs once (client timeout 600 s, then killed); a failure,
+      # timeout or kill is classified below, never retried.
       - name: Apply S3 migration (supabase db push, once)
         id: apply
         timeout-minutes: 12
@@ -89,9 +104,11 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: bash .github/scripts/s3-migration/run.sh apply
 
+      # Runs whenever the push may have started, including after a step timeout
+      # or cancellation. Waits at most 240 s for a stable answer.
       - name: Classify result (read-only)
-        if: always() && steps.apply.outputs.attempted == 'true'
-        timeout-minutes: 4
+        if: always() && (steps.apply.outputs.attempted == 'true' || steps.apply.outcome == 'failure' || steps.apply.outcome == 'cancelled')
+        timeout-minutes: 7
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           PUSH_EXIT_CODE: ${{ steps.apply.outputs.exit_code }}

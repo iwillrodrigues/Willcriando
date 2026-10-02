@@ -103,14 +103,25 @@ Migration `20261002120000_s3_dismissal_versions_deletion.sql`, tests in `supabas
 Applying S3 to the development project: the manual workflow `.github/workflows/s3-migration.yml` (Actions → "S3 migration (willcriando dev)" → Run workflow, type `anhaonrifwakoekksopv`) applies this migration to `anhaonrifwakoekksopv` only, with Supabase CLI 2.119.0 (`supabase db push`), so the hosted history records version `20261002120000`. Steps, each failing closed, implemented in `.github/scripts/s3-migration/`:
 
 1. Source: HEAD descends from `476377b3ed19c168ea95326ac2e1c64d79df094c`, `supabase/` is identical to it, the checkout is clean, and the migration's SHA256 is `135152c4d48849b61a134c379cd8b785fd05281951180c314a5a00c7e84b40e5`.
-2. Target: the connection string is a session-mode (port 5432) connection for `anhaonrifwakoekksopv`.
-3. Preflight, read-only: the hosted history is exactly the four prior migrations, no S3 object exists, the catalog has 67 paths, `supabase migration list` shows S3 as the only pending migration, and `supabase db push --dry-run` would push only S3. Row counts and content fingerprints are recorded.
-4. `supabase db push`, once. A failure or timeout is never retried.
-5. Read-only classification: applied (history has S3 exactly once and every S3 object exists), not applied (history and schema unchanged) or uncertain. Only "applied" continues.
-6. Read-only validation of the S3 schema, grants and policies, and of record preservation (same counts and fingerprints as before; no presentation version is created).
-7. The S1, S2 and S3 pgTAP files (41, 71 and 66 tests), each one transaction that rolls back, then a check that no record changed.
+2. Target: an offline self-test of the checker runs first. Then the connection string must be exactly the approved session pooler form below, matched on the raw string, and urllib and libpq's own parser must read it identically: one host, no `hostaddr` or other options, and no `PG*` variable that could redirect it. Password candidates are masked before anything else is printed.
+3. Telemetry: `SUPABASE_TELEMETRY_DISABLED=1` and `DO_NOT_TRACK=1` are set for the job, and `supabase telemetry disable` and `supabase telemetry status` must both report "Telemetry is disabled." before any database command runs.
+4. Preflight, read-only: the hosted history is exactly the four prior migrations, no S3 object exists, the catalog has 67 paths, `supabase migration list` shows S3 as the only pending migration, and `supabase db push --dry-run` would push only S3. Row counts and content fingerprints are recorded.
+5. `supabase db push`, once, killed after 600 s. A failure, timeout or kill is never retried.
+6. Read-only classification. Applied: the push exited 0, the history has S3 exactly once and every S3 object exists. Not applied: only after several read-only observations over a stable window (at most 240 s) all show the prior history, no S3 object and no session that could still be running the push (any non-idle session of the same login role, any session naming an S3 or history object, waiting on a lock, or holding a strong lock), and only when this role can see every session. Everything else is uncertain, including a push that completes on the server after the client was killed. Only "applied" continues. Classification never retries, terminates a session or repairs anything.
+7. Read-only validation of the S3 schema, grants and policies, and of record preservation (same counts and fingerprints as before; no presentation version is created).
+8. The S1, S2 and S3 pgTAP files (41, 71 and 66 tests), each one transaction that rolls back, then a check that no record changed.
 
-Required secret (repository or `willcriando-dev` environment): `SUPABASE_DB_URL`, the willcriando session pooler connection string (Dashboard → Connect → Session pooler, port 5432, user `postgres.anhaonrifwakoekksopv`, with the database password). GitHub runners have no IPv6, so the direct `db.anhaonrifwakoekksopv.supabase.co` host usually cannot be reached from them. No Supabase access token is needed. The workflow deploys nothing.
+Required secret, stored in the `willcriando-dev` environment only (a repository- or organization-level secret of the same name would be used if the environment lacks it): `SUPABASE_DB_URL`, exactly
+
+```
+postgresql://postgres.anhaonrifwakoekksopv:<password>@aws-<n>-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
+```
+
+the willcriando session pooler string (Dashboard → Connect → Session pooler) with `?sslmode=require` appended. The password may contain only letters, digits and `._~-`, or `%XX` escapes, at least 12 characters. The direct `db.anhaonrifwakoekksopv.supabase.co` host is refused. No Supabase access token is needed. The workflow deploys nothing.
+
+The checker's tests run offline with `python3 .github/scripts/s3-migration/test_check_db_url.py`.
+
+The workflow cannot be dispatched yet: GitHub starts `workflow_dispatch` only for workflows whose file exists on the default branch, and this reviewed file is not there.
 
 ## Catalog import (S2)
 
