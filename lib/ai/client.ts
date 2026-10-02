@@ -99,16 +99,42 @@ export async function generateStructured<W extends z.ZodType, S extends z.ZodTyp
   return { value: checked.data, servedModel: response.model };
 }
 
-const MAX_LOGGED_MESSAGE = 500;
+/** Accept only token-like provider values, so free text can never ride along. */
+function token(value: unknown, pattern: RegExp): string | null {
+  return typeof value === "string" && pattern.test(value) ? value : null;
+}
 
-function clip(value: unknown): string | null {
-  return typeof value === "string" && value ? value.slice(0, MAX_LOGGED_MESSAGE) : null;
+const ERROR_TYPE = /^[a-z_]{1,64}$/;
+const REQUEST_ID = /^[A-Za-z0-9_-]{1,128}$/;
+
+/**
+ * Fixed categories matched against the provider message, in order. Only the
+ * category name is logged, never the message or what matched in it.
+ */
+const MESSAGE_CATEGORIES: [string, RegExp][] = [
+  // Permission first: its messages often mention the API key too.
+  ["permission", /permission|forbidden|not allowed|access denied|does not have access/i],
+  ["authentication", /api[ -]?key|authenticat|unauthori[sz]ed|credential/i],
+  ["billing", /credit balance|billing|payment|purchase credits/i],
+  ["rate_limit", /rate[ _-]?limit|too many requests/i],
+  ["overloaded", /overloaded/i],
+  ["model_not_found", /^model:|\bmodel\b.*\b(not found|does not exist|not available)\b/i],
+  ["token_limit", /prompt is too long|max_tokens|context (window|length)|too many tokens|token limit/i],
+  ["structured_output", /output_config\.format|output_format|json schema|structured output|\bschema\b/i],
+  ["invalid_parameter", /invalid|unexpected|not supported|unsupported|extra inputs|field required|unknown (parameter|field)|beta/i],
+];
+
+function messageCategory(message: unknown): string {
+  if (typeof message !== "string") return "unknown";
+  const text = message.slice(0, 2000);
+  return MESSAGE_CATEGORIES.find(([, pattern]) => pattern.test(text))?.[0] ?? "unknown";
 }
 
 /**
  * Safe diagnostic fields for a failed provider call, or null when there is
- * nothing to log. Only status, error type, error message and request id are
- * kept: never headers, the request (prompt, briefing) or the full body.
+ * nothing to log. No provider or SDK message, body, header, prompt or
+ * briefing is ever included, nor any substring of them: only the status,
+ * token-shaped type and request id, and an application-owned category.
  * Errors the SDK raises after a response arrives (output parsing) are left
  * out, because their messages can quote the model's output.
  */
@@ -116,17 +142,18 @@ export function providerFailureLog(error: unknown): Record<string, string | numb
   if (!(error instanceof Anthropic.APIError)) return null;
 
   if (error.status === undefined) {
-    // Thrown before any response (network, timeout, abort). Explicit names,
+    // Thrown before any response (network, timeout, abort), or a statusless
+    // APIError whose message can hold a whole response body. Explicit names,
     // because bundling can minify class names.
-    const name =
+    const [name, category] =
       error instanceof Anthropic.APIConnectionTimeoutError
-        ? "APIConnectionTimeoutError"
+        ? ["APIConnectionTimeoutError", "timeout"]
         : error instanceof Anthropic.APIConnectionError
-          ? "APIConnectionError"
+          ? ["APIConnectionError", "connection"]
           : error instanceof Anthropic.APIUserAbortError
-            ? "APIUserAbortError"
-            : "APIError";
-    return { event: "anthropic_request_threw", error_name: name, error_message: clip(error.message) };
+            ? ["APIUserAbortError", "aborted"]
+            : ["APIError", "unknown"];
+    return { event: "anthropic_request_threw", error_name: name, error_category: category };
   }
 
   // Body shape: { type: "error", error: { type, message }, request_id }.
@@ -134,9 +161,9 @@ export function providerFailureLog(error: unknown): Record<string, string | numb
   return {
     event: "anthropic_request_failed",
     status: error.status,
-    error_type: clip(error.type) ?? clip(body?.error?.type),
-    error_message: clip(body?.error?.message),
-    request_id: clip(error.requestID) ?? clip(body?.request_id),
+    error_type: token(error.type, ERROR_TYPE) ?? token(body?.error?.type, ERROR_TYPE),
+    error_category: messageCategory(body?.error?.message),
+    request_id: token(error.requestID, REQUEST_ID) ?? token(body?.request_id, REQUEST_ID),
   };
 }
 
