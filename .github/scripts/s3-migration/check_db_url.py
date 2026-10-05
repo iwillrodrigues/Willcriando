@@ -42,9 +42,17 @@ def reject(code):
     sys.exit(1)
 
 
+def command_escape(value):
+    """Escapes a workflow command value. The runner un-escapes %25, %0D and %0A in
+    ::add-mask:: values, so a literal "%25" in a password must be sent as "%2525"
+    for the mask to cover the text as it appears."""
+    return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def mask_candidates(raw):
     """Masks every plausible password substring, split on control characters so
-    each ::add-mask:: line is single-line. Runs before any validation output."""
+    each ::add-mask:: line is single-line, and escaped so the runner registers the
+    literal text. Runs before any validation output."""
     rest = raw.split("://", 1)[-1]
     candidates = set()
     for userinfo in (rest.split("@", 1)[0], rest.rsplit("@", 1)[0]):
@@ -57,7 +65,7 @@ def mask_candidates(raw):
         for fragment in CONTROL.split(value):
             fragment = fragment.strip()
             if len(fragment) >= 4 and fragment not in (USER, "postgres", "postgresql"):
-                print(f"::add-mask::{fragment}", flush=True)
+                print(f"::add-mask::{command_escape(fragment)}", flush=True)
 
 
 def libpq_options(raw):

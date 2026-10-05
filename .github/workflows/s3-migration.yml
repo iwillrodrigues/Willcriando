@@ -56,7 +56,8 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      # v4.4.0, the commit the v4 tag points to (releases-v4 line, node20).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         timeout-minutes: 3
         with:
           ref: ${{ github.sha }}
@@ -79,11 +80,14 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: bash .github/scripts/s3-migration/run.sh target
 
-      # Pinned to the v1.7.3 commit: the CLI it installs later receives the database secret.
-      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
-        timeout-minutes: 3
-        with:
-          version: ${{ env.SUPABASE_CLI_VERSION }}
+      # Replaces supabase/setup-cli, which runs the CLI before it can be checked.
+      # Downloads the pinned release archive and verifies its SHA-256, contents
+      # and both binaries against values committed in run.sh. No secret here, and
+      # nothing executes the CLI until this step has succeeded; every later call
+      # re-verifies the binaries and runs them by absolute path.
+      - name: Install and verify Supabase CLI
+        timeout-minutes: 4
+        run: bash .github/scripts/s3-migration/run.sh install-cli
 
       - name: Disable and verify CLI telemetry
         timeout-minutes: 2

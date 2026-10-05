@@ -19,6 +19,16 @@ HOST = "aws-0-us-west-2.pooler.supabase.com"
 GOOD = f"postgresql://postgres.{REF}:{PW}@{HOST}:5432/postgres?sslmode=require"
 
 
+def registered_masks(stdout):
+    """What the GitHub runner registers for each ::add-mask:: line: it un-escapes
+    %0D, %0A and then %25 in the value."""
+    masks = []
+    for line in stdout.splitlines():
+        if line.startswith("::add-mask::"):
+            masks.append(line[len("::add-mask::"):].replace("%0D", "\r").replace("%0A", "\n").replace("%25", "%"))
+    return masks
+
+
 def run(url, extra_env=None):
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin")}
     if url is not None:
@@ -116,7 +126,7 @@ class CheckDbUrl(unittest.TestCase):
                 self.assertEqual(result.stderr, "")
                 self.assert_clean_output(result, url)
                 password = url.split("://", 1)[1].rsplit("@", 1)[0].split(":", 1)[1]
-                self.assertIn(f"::add-mask::{password}", result.stdout.splitlines())
+                self.assertIn(password, registered_masks(result.stdout))
 
     def test_rejected(self):
         for name, url in REJECTED.items():
@@ -133,6 +143,33 @@ class CheckDbUrl(unittest.TestCase):
         masks = result.stdout.splitlines()
         self.assertIn("::add-mask::Abcdefgh", masks)
         self.assertIn("::add-mask::ijklmnop", masks)
+
+    def test_mask_lines_are_escaped_and_register_the_literal_text(self):
+        # N1: the runner un-escapes %25, %0D and %0A, so each must be sent escaped.
+        cases = {
+            "%25 in an accepted password": ("Ab%25cdefghijkl", 0, ["Ab%25cdefghijkl", "Ab%cdefghijkl"]),
+            "%0A in the password": ("Abcdefgh%0Aijklmn", 1, ["Abcdefgh%0Aijklmn", "Abcdefgh", "ijklmn"]),
+            "%0D in the password": ("Abcdefgh%0Dijklmn", 1, ["Abcdefgh%0Dijklmn", "Abcdefgh", "ijklmn"]),
+            "%250A in the password": ("Abcdefgh%250Aijk", 0, ["Abcdefgh%250Aijk", "Abcdefgh%0Aijk"]),
+        }
+        for name, (password, status, literals) in cases.items():
+            with self.subTest(name):
+                url = GOOD.replace(PW, password)
+                result = run(url)
+                self.assertEqual(result.returncode, status, result.stderr)
+                masks = registered_masks(result.stdout)
+                for literal in literals:
+                    self.assertIn(literal, masks)
+                for line in result.stdout.splitlines():
+                    value = line[len("::add-mask::"):]
+                    self.assertNotIn("\r", value)
+                    self.assertNotRegex(value, r"%(?!25|0D|0A)")
+                self.assertTrue(all("\n" not in m and "\r" not in m for m in masks))
+                # The registered masks cover the password wherever the URL is printed.
+                text = url
+                for mask in sorted(masks, key=len, reverse=True):
+                    text = text.replace(mask, "***")
+                self.assertNotIn(password, text)
 
     def test_missing_variable(self):
         result = run(None)

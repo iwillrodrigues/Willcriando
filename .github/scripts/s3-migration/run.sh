@@ -3,6 +3,8 @@
 # mismatch prints an ::error annotation and exits non-zero.
 #
 #   run.sh source      exact source commit, clean checkout, migration path and SHA256
+#   run.sh install-cli pinned Supabase CLI archive: SHA-256, contents and both binaries
+#                      verified before anything executes them
 #   run.sh target      SUPABASE_DB_URL is the approved session pooler of anhaonrifwakoekksopv (check_db_url.py)
 #   run.sh telemetry   CLI telemetry disabled and verified
 #   run.sh preflight   read-only: history, schema state, catalog, CLI list and dry run, record snapshot
@@ -41,10 +43,22 @@ MIGRATION_FILES='20260930180114_enable_pgtap.sql
 20261001181854_catalog_editorial_nodes.sql
 20261002120000_s3_dismissal_versions_deletion.sql'
 
+# Supabase CLI release v2.119.0, linux amd64. The archive digest equals the
+# release's checksums.txt entry, and both binaries are byte-identical to npm's
+# @supabase/cli-linux-x64@2.119.0. Pinned here, never fetched at run time.
+CLI_VERSION=2.119.0
+CLI_ARCHIVE_URL=https://github.com/supabase/cli/releases/download/v2.119.0/supabase_2.119.0_linux_amd64.tar.gz
+CLI_ARCHIVE_SHA256=bf1c3ae93be98533eb8a3105dbf4564bd0b2d9dc24690d8a920f980ef975c1b4
+CLI_BIN_SHA256=2d142ea645f9fe1436b3b728e5873056b5390eeb2fc838024ae3d2905f5afd94
+CLI_GO_SHA256=dc350a51d4377d32837e6d76163039c8611fa6552cab568eb42f6f11d5fe2a02
+
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 work="${RUNNER_TEMP:?}/s3-migration"
 mkdir -p "$work"
 report="$work/report.md"
+cli_dir="$work/cli"
+# Only this verified path is executed; PATH is never searched for the CLI.
+SUPABASE_BIN="$cli_dir/supabase"
 
 step="${1:?subcommand}"
 # The job log: annotations go here even from redirected calls and subshells.
@@ -81,19 +95,44 @@ note() {
   echo "$1"
   echo "- $1" >>"$report"
 }
+# Pins present and well formed, and the workflow asks for the pinned version.
+cli_pins() {
+  local pin
+  for pin in "$CLI_ARCHIVE_SHA256" "$CLI_BIN_SHA256" "$CLI_GO_SHA256"; do
+    [[ "$pin" =~ ^[0-9a-f]{64}$ ]] || fail "a pinned Supabase CLI checksum is missing or malformed."
+  done
+  [ "${SUPABASE_CLI_VERSION:-}" = "$CLI_VERSION" ] ||
+    fail "SUPABASE_CLI_VERSION is '${SUPABASE_CLI_VERSION:-}', but the pinned CLI is $CLI_VERSION."
+  command -v sha256sum >/dev/null || fail "sha256sum is not available; cannot verify the Supabase CLI."
+}
+# Re-verifies both installed binaries before every execution of the CLI.
+cli_guard() {
+  local file pin actual
+  cli_pins
+  for file in supabase supabase-go; do
+    pin=$CLI_BIN_SHA256
+    [ "$file" = "supabase-go" ] && pin=$CLI_GO_SHA256
+    [ -f "$cli_dir/$file" ] && [ ! -L "$cli_dir/$file" ] || fail "Supabase CLI $file is missing or not a regular file; run install-cli."
+    actual=$(sha256sum "$cli_dir/$file" | cut -d' ' -f1)
+    [ "$actual" = "$pin" ] || fail "Supabase CLI $file SHA-256 is $actual, expected $pin."
+  done
+}
 # Read-only SQL files open "begin transaction read only" and end with rollback.
 psql_file() {
   pg_env_guard
   PGCONNECT_TIMEOUT=15 timeout --kill-after=10 "${2:-120}" psql "${SUPABASE_DB_URL:?}" -X -q -At -v ON_ERROR_STOP=1 -f "$1"
 }
-history() { psql_file "$here/history.sql"; }
-s3_state() { psql_file "$here/state.sql"; }
-sessions() { psql_file "$here/sessions.sql" 60; }
-snapshot() { psql_file "$here/snapshot.sql" >"$work/snapshot-$1.txt"; }
+# Optional argument: client timeout in seconds. Each query file also sets its
+# own statement_timeout (30 or 60 s).
+history() { psql_file "$here/history.sql" "${1:-120}"; }
+s3_state() { psql_file "$here/state.sql" "${1:-120}"; }
+sessions() { psql_file "$here/sessions.sql" "${1:-60}"; }
+snapshot() { psql_file "$here/snapshot.sql" "${2:-120}" >"$work/snapshot-$1.txt"; }
 supabase_cli() {
   pg_env_guard
+  cli_guard
   telemetry_guard
-  timeout --kill-after=15 "$1" supabase "${@:2}" --db-url "${SUPABASE_DB_URL:?}" --output-format json --agent no
+  timeout --kill-after=15 "$1" "$SUPABASE_BIN" "${@:2}" --db-url "${SUPABASE_DB_URL:?}" --output-format json --agent no
 }
 
 # Database steps refuse redirecting PG* variables up front, in this shell, so
@@ -117,6 +156,32 @@ source)
   note "Source: HEAD \`$(git rev-parse HEAD)\` descends from \`$SOURCE_COMMIT\`; \`supabase/\` identical to it; clean checkout; migration SHA256 \`$actual\`."
   ;;
 
+install-cli)
+  # No secret in this step. Downloads the pinned archive, checks its SHA-256 and
+  # contents, extracts the two binaries and checks theirs. Nothing is executed.
+  cli_pins
+  for tool in curl tar uname; do
+    command -v "$tool" >/dev/null || fail "$tool is not available; cannot install the Supabase CLI."
+  done
+  [ "$(uname -s)/$(uname -m)" = "Linux/x86_64" ] || fail "the pinned Supabase CLI is for Linux x86_64 only."
+  download="$work/cli-download"
+  [ ! -e "$cli_dir" ] && [ ! -e "$download" ] || fail "$cli_dir or $download already exists; refusing to reuse unverified files."
+  mkdir -p "$download" "$cli_dir"
+  archive="$download/$(basename "$CLI_ARCHIVE_URL")"
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    --connect-timeout 20 --max-time 180 --output "$archive" "$CLI_ARCHIVE_URL" ||
+    fail "downloading the Supabase CLI archive failed."
+  actual=$(sha256sum "$archive" | cut -d' ' -f1)
+  [ "$actual" = "$CLI_ARCHIVE_SHA256" ] || fail "Supabase CLI archive SHA-256 is $actual, expected $CLI_ARCHIVE_SHA256."
+  entries=$(tar -tzf "$archive" | LC_ALL=C sort) || fail "the Supabase CLI archive cannot be listed."
+  [ "$entries" = "$(printf 'supabase\nsupabase-go')" ] || fail "the Supabase CLI archive does not hold exactly supabase and supabase-go."
+  [ "$(tar -tvzf "$archive" | cut -c1 | LC_ALL=C sort -u)" = "-" ] || fail "the Supabase CLI archive holds something other than regular files."
+  tar -xzf "$archive" -C "$cli_dir" --no-same-owner supabase supabase-go || fail "extracting the Supabase CLI archive failed."
+  chmod 0555 "$cli_dir/supabase" "$cli_dir/supabase-go"
+  cli_guard
+  note "Supabase CLI $CLI_VERSION: archive SHA-256 \`$actual\` and both binaries match the pinned values; contents exactly supabase and supabase-go."
+  ;;
+
 target)
   # Masks password candidates first, then accepts exactly one raw form and
   # requires urllib and libpq to read it identically. Prints only a reason code.
@@ -128,10 +193,13 @@ target)
 telemetry)
   [ "${SUPABASE_TELEMETRY_DISABLED:-}" = "1" ] && [ "${DO_NOT_TRACK:-}" = "1" ] && [ -z "${SUPABASE_HOME:-}" ] ||
     fail "SUPABASE_TELEMETRY_DISABLED=1 and DO_NOT_TRACK=1 must be set and SUPABASE_HOME unset."
-  [ "$(supabase --version)" = "${SUPABASE_CLI_VERSION:?}" ] || fail "Supabase CLI is not version $SUPABASE_CLI_VERSION."
-  out=$(timeout --kill-after=5 30 supabase telemetry disable) || fail "supabase telemetry disable failed."
+  cli_guard
+  [ "$(timeout --kill-after=5 30 "$SUPABASE_BIN" --version)" = "$CLI_VERSION" ] || fail "Supabase CLI is not version $CLI_VERSION."
+  cli_guard
+  out=$(timeout --kill-after=5 30 "$SUPABASE_BIN" telemetry disable) || fail "supabase telemetry disable failed."
   [ "$out" = "Telemetry is disabled." ] || fail "supabase telemetry disable did not confirm."
-  out=$(timeout --kill-after=5 30 supabase telemetry status) || fail "supabase telemetry status failed."
+  cli_guard
+  out=$(timeout --kill-after=5 30 "$SUPABASE_BIN" telemetry status) || fail "supabase telemetry status failed."
   [ "$out" = "Telemetry is disabled." ] || fail "supabase telemetry status does not report disabled."
   telemetry_guard
   note "Telemetry: disabled by environment (SUPABASE_TELEMETRY_DISABLED, DO_NOT_TRACK) and in CLI settings; status verified."
@@ -139,7 +207,9 @@ telemetry)
 
 preflight)
   command -v psql >/dev/null || fail "psql is not installed on the runner."
-  [ "$(supabase --version)" = "${SUPABASE_CLI_VERSION:?}" ] || fail "Supabase CLI is not version $SUPABASE_CLI_VERSION."
+  cli_guard
+  telemetry_guard
+  [ "$(timeout --kill-after=5 30 "$SUPABASE_BIN" --version)" = "$CLI_VERSION" ] || fail "Supabase CLI is not version $CLI_VERSION."
 
   before=$(history) || fail "could not read the hosted migration history."
   printf '%s\n' "$before" >"$work/history-before.txt"
@@ -214,10 +284,13 @@ classify)
     fail "Result: UNCERTAIN (push exit $exit_code). $1 Not retried, no session terminated, nothing repaired; inspect before any further action."
   }
 
+  # Each read is capped at 30 s (killed 10 s later at most), so one observation
+  # takes at most 120 s and the loop ends within budget + 120 = 360 s, inside
+  # the step's 420 s limit: the step always reaches its own verdict.
   observe() {
-    after=$(history) || { after="unreadable"; return 1; }
-    state=$(s3_state) || { state="unreadable"; return 1; }
-    probe=$(sessions) || { probe="unreadable"; return 1; }
+    after=$(history 30) || { after="unreadable"; return 1; }
+    state=$(s3_state 30) || { state="unreadable"; return 1; }
+    probe=$(sessions 30) || { probe="unreadable"; return 1; }
   }
 
   if [ "$exit_code" = "0" ]; then
@@ -272,7 +345,9 @@ classify)
   ;;
 
 validate)
-  psql_file "$here/validate.sql" >"$work/validate.txt" || fail "the validation query failed."
+  # Two reads capped at 90 s each (killed 10 s later at most): 200 s, inside the
+  # step's 240 s limit.
+  psql_file "$here/validate.sql" 90 >"$work/validate.txt" || fail "the validation query failed."
   cat "$work/validate.txt"
   passed=$(grep -c '^PASS|' "$work/validate.txt" || true)
   total=$(wc -l <"$work/validate.txt")
@@ -283,7 +358,7 @@ validate)
   [ "$total" -eq 27 ] || fail "expected 27 schema checks, got $total."
   [ "$passed" -eq "$total" ] || fail "$((total - passed)) schema checks failed."
 
-  snapshot after || fail "could not record the post-migration snapshot."
+  snapshot after 90 || fail "could not record the post-migration snapshot."
   diff -u "$work/snapshot-before.txt" "$work/snapshot-after.txt" >"$work/snapshot.diff" ||
     fail "existing records changed: $(grep -E '^[-+][a-z_]+\|' "$work/snapshot.diff" | cut -d'|' -f1,2 | paste -sd ' ' -)."
   note "Records after: identical to before (counts and content fingerprints, 13 tables)."
