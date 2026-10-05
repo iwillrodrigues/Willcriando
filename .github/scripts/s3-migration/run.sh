@@ -64,8 +64,46 @@ step="${1:?subcommand}"
 # The job log: annotations go here even from redirected calls and subshells.
 exec 3>&1
 
+# Workflow command escaping (GitHub runner protocol). Data escapes %, CR and LF;
+# a property also escapes : and ,. % goes first, so the runner's un-escaping
+# (%0D, %0A, then %25) gives back exactly the original text on one line.
+command_data() {
+  local v=$1
+  v=${v//'%'/'%25'}
+  v=${v//$'\r'/'%0D'}
+  v=${v//$'\n'/'%0A'}
+  printf '%s' "$v"
+}
+command_property() {
+  local v
+  v=$(command_data "$1")
+  v=${v//':'/'%3A'}
+  v=${v//','/'%2C'}
+  printf '%s' "$v"
+}
+# Shows text this script does not control (psql, CLI and server messages, query
+# results) in the job log with workflow commands suspended, so no part of it is
+# parsed as a command: not ::cmd::, not ##[cmd] anywhere in a line, not a line
+# split off at a bare CR. The resume token is random and printed only after the text.
+show_untrusted() {
+  local text token
+  text=$(cat; printf .)
+  text=${text%.}
+  [ -n "$text" ] || return 0
+  token=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+  [[ "$token" =~ ^[0-9a-f]{32}$ ]] || {
+    echo "::error title=S3 migration::could not create a stop-commands token." >&3
+    exit 1
+  }
+  {
+    printf '::stop-commands::%s\n%s' "$token" "$text"
+    [ "${text: -1}" = $'\n' ] || echo
+    printf '::%s::\n' "$token"
+  } >&3
+}
+
 fail() {
-  echo "::error title=S3 migration ($step)::$1" >&3
+  echo "::error title=$(command_property "S3 migration ($step)")::$(command_data "$1")" >&3
   echo "- **$step: FAILED.** $1" >>"$report"
   exit 1
 }
@@ -92,10 +130,19 @@ telemetry_guard() {
     fail "CLI telemetry is not recorded as disabled in $HOME/.supabase/telemetry.json."
 }
 note() {
-  echo "$1"
+  printf '%s\n' "$1" | show_untrusted
   echo "- $1" >>"$report"
 }
-# Pins present and well formed, and the workflow asks for the pinned version.
+# A system tool by absolute path. One that resolves anywhere but /usr/bin or /bin
+# (a PATH entry added by an earlier step, an exported shell function) is refused.
+system_tool() {
+  local path
+  path=$(command -v "$1") || fail "$1 is not available; cannot verify the Supabase CLI."
+  [ "$path" = "/usr/bin/$1" ] || [ "$path" = "/bin/$1" ] || fail "$1 resolves to '$path', not /usr/bin or /bin; refusing it."
+  printf '%s' "$path"
+}
+# Pins present and well formed, the workflow asks for the pinned version, and the
+# tools that verify and launch the CLI are the system's own.
 cli_pins() {
   local pin
   for pin in "$CLI_ARCHIVE_SHA256" "$CLI_BIN_SHA256" "$CLI_GO_SHA256"; do
@@ -103,7 +150,9 @@ cli_pins() {
   done
   [ "${SUPABASE_CLI_VERSION:-}" = "$CLI_VERSION" ] ||
     fail "SUPABASE_CLI_VERSION is '${SUPABASE_CLI_VERSION:-}', but the pinned CLI is $CLI_VERSION."
-  command -v sha256sum >/dev/null || fail "sha256sum is not available; cannot verify the Supabase CLI."
+  SHA256SUM=$(system_tool sha256sum) || exit 1
+  TIMEOUT_BIN=$(system_tool timeout) || exit 1
+  ENV_BIN=$(system_tool env) || exit 1
 }
 # Re-verifies both installed binaries before every execution of the CLI.
 cli_guard() {
@@ -113,26 +162,53 @@ cli_guard() {
     pin=$CLI_BIN_SHA256
     [ "$file" = "supabase-go" ] && pin=$CLI_GO_SHA256
     [ -f "$cli_dir/$file" ] && [ ! -L "$cli_dir/$file" ] || fail "Supabase CLI $file is missing or not a regular file; run install-cli."
-    actual=$(sha256sum "$cli_dir/$file" | cut -d' ' -f1)
+    actual=$("$SHA256SUM" "$cli_dir/$file") || fail "cannot hash Supabase CLI $file."
+    actual=${actual%% *}
     [ "$actual" = "$pin" ] || fail "Supabase CLI $file SHA-256 is $actual, expected $pin."
   done
 }
+# Runs the verified CLI: fresh integrity check of both binaries, a hard time limit
+# (SIGKILL to its process group GRACE s after LIMIT), and an environment built from
+# nothing. No inherited variable (SUPABASE_GO_BINARY, LD_PRELOAD, BUN_OPTIONS, PG*,
+# SUPABASE_*) reaches it, and the shim is told to use the verified sidecar. Its
+# stderr is shown with workflow commands suspended. Usage: cli_run LIMIT GRACE ARGS...
+cli_run() {
+  local limit=$1 grace=$2 rc=0
+  shift 2
+  cli_guard
+  "$TIMEOUT_BIN" --kill-after="$grace" "$limit" "$ENV_BIN" -i HOME="${HOME:?}" PATH=/usr/bin:/bin \
+    SUPABASE_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 SUPABASE_GO_BINARY="$cli_dir/supabase-go" \
+    "$SUPABASE_BIN" "$@" 2>"$work/cli.err" || rc=$?
+  show_untrusted <"$work/cli.err"
+  return "$rc"
+}
 # Read-only SQL files open "begin transaction read only" and end with rollback.
+# Killed GRACE 10 s after the limit; psql's stderr is shown with commands suspended.
 psql_file() {
+  local rc=0
   pg_env_guard
-  PGCONNECT_TIMEOUT=15 timeout --kill-after=10 "${2:-120}" psql "${SUPABASE_DB_URL:?}" -X -q -At -v ON_ERROR_STOP=1 -f "$1"
+  PGCONNECT_TIMEOUT=15 timeout --kill-after=10 "${2:-120}" psql "${SUPABASE_DB_URL:?}" -X -q -At -v ON_ERROR_STOP=1 -f "$1" \
+    2>"$work/psql.err" || rc=$?
+  show_untrusted <"$work/psql.err"
+  return "$rc"
 }
 # Optional argument: client timeout in seconds. Each query file also sets its
-# own statement_timeout (30 or 60 s).
+# own statement_timeout: 30 s for history, state and sessions, 60 s for snapshot
+# and validate. With the 15 s connect timeout, 45 s and 75 s cover a slow but
+# healthy read.
 history() { psql_file "$here/history.sql" "${1:-120}"; }
 s3_state() { psql_file "$here/state.sql" "${1:-120}"; }
 sessions() { psql_file "$here/sessions.sql" "${1:-60}"; }
 snapshot() { psql_file "$here/snapshot.sql" "${2:-120}" >"$work/snapshot-$1.txt"; }
 supabase_cli() {
   pg_env_guard
-  cli_guard
   telemetry_guard
-  timeout --kill-after=15 "$1" "$SUPABASE_BIN" "${@:2}" --db-url "${SUPABASE_DB_URL:?}" --output-format json --agent no
+  cli_run "$1" 15 "${@:2}" --db-url "${SUPABASE_DB_URL:?}" --output-format json --agent no
+}
+# tar, and the gzip it starts, run with a fixed environment: no TAR_OPTIONS, TAPE,
+# GZIP, POSIXLY_CORRECT or PATH entry can add options, members or programs.
+untar() {
+  "$ENV_BIN" -i PATH=/usr/bin:/bin LC_ALL=C "$TAR_BIN" --force-local "$@"
 }
 
 # Database steps refuse redirecting PG* variables up front, in this shell, so
@@ -160,23 +236,32 @@ install-cli)
   # No secret in this step. Downloads the pinned archive, checks its SHA-256 and
   # contents, extracts the two binaries and checks theirs. Nothing is executed.
   cli_pins
-  for tool in curl tar uname; do
-    command -v "$tool" >/dev/null || fail "$tool is not available; cannot install the Supabase CLI."
-  done
+  CURL_BIN=$(system_tool curl) || exit 1
+  TAR_BIN=$(system_tool tar) || exit 1
+  system_tool gzip >/dev/null || exit 1
+  command -v uname >/dev/null || fail "uname is not available; cannot install the Supabase CLI."
   [ "$(uname -s)/$(uname -m)" = "Linux/x86_64" ] || fail "the pinned Supabase CLI is for Linux x86_64 only."
   download="$work/cli-download"
   [ ! -e "$cli_dir" ] && [ ! -e "$download" ] || fail "$cli_dir or $download already exists; refusing to reuse unverified files."
   mkdir -p "$download" "$cli_dir"
   archive="$download/$(basename "$CLI_ARCHIVE_URL")"
-  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+  # -q (first) ignores every curl config file (.curlrc via HOME, CURL_HOME or
+  # XDG_CONFIG_HOME). Proxy and CA variables still apply, so a runner proxy
+  # works; they can change the route, never the bytes accepted below.
+  "$ENV_BIN" -u SSLKEYLOGFILE "$CURL_BIN" -q --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
     --connect-timeout 20 --max-time 180 --output "$archive" "$CLI_ARCHIVE_URL" ||
     fail "downloading the Supabase CLI archive failed."
-  actual=$(sha256sum "$archive" | cut -d' ' -f1)
+  actual=$("$SHA256SUM" "$archive") || fail "cannot hash the Supabase CLI archive."
+  actual=${actual%% *}
   [ "$actual" = "$CLI_ARCHIVE_SHA256" ] || fail "Supabase CLI archive SHA-256 is $actual, expected $CLI_ARCHIVE_SHA256."
-  entries=$(tar -tzf "$archive" | LC_ALL=C sort) || fail "the Supabase CLI archive cannot be listed."
-  [ "$entries" = "$(printf 'supabase\nsupabase-go')" ] || fail "the Supabase CLI archive does not hold exactly supabase and supabase-go."
-  [ "$(tar -tvzf "$archive" | cut -c1 | LC_ALL=C sort -u)" = "-" ] || fail "the Supabase CLI archive holds something other than regular files."
-  tar -xzf "$archive" -C "$cli_dir" --no-same-owner supabase supabase-go || fail "extracting the Supabase CLI archive failed."
+  # The pinned archive lists exactly these two members, in this order, both regular files.
+  entries=$(untar -tzf "$archive") || fail "the Supabase CLI archive cannot be listed."
+  [ "$entries" = $'supabase\nsupabase-go' ] || fail "the Supabase CLI archive does not hold exactly supabase and supabase-go."
+  listing=$(untar -tvzf "$archive") || fail "the Supabase CLI archive cannot be listed."
+  while IFS= read -r line; do
+    [ "${line:0:1}" = "-" ] || fail "the Supabase CLI archive holds something other than regular files."
+  done <<<"$listing"
+  untar -xzf "$archive" -C "$cli_dir" --no-same-owner supabase supabase-go || fail "extracting the Supabase CLI archive failed."
   chmod 0555 "$cli_dir/supabase" "$cli_dir/supabase-go"
   cli_guard
   note "Supabase CLI $CLI_VERSION: archive SHA-256 \`$actual\` and both binaries match the pinned values; contents exactly supabase and supabase-go."
@@ -193,49 +278,50 @@ target)
 telemetry)
   [ "${SUPABASE_TELEMETRY_DISABLED:-}" = "1" ] && [ "${DO_NOT_TRACK:-}" = "1" ] && [ -z "${SUPABASE_HOME:-}" ] ||
     fail "SUPABASE_TELEMETRY_DISABLED=1 and DO_NOT_TRACK=1 must be set and SUPABASE_HOME unset."
-  cli_guard
-  [ "$(timeout --kill-after=5 30 "$SUPABASE_BIN" --version)" = "$CLI_VERSION" ] || fail "Supabase CLI is not version $CLI_VERSION."
-  cli_guard
-  out=$(timeout --kill-after=5 30 "$SUPABASE_BIN" telemetry disable) || fail "supabase telemetry disable failed."
+  # Three CLI calls, each verified first and capped at 30 s plus 5 s to SIGKILL.
+  [ "$(cli_run 30 5 --version)" = "$CLI_VERSION" ] || fail "Supabase CLI is not version $CLI_VERSION."
+  out=$(cli_run 30 5 telemetry disable) || fail "supabase telemetry disable failed."
   [ "$out" = "Telemetry is disabled." ] || fail "supabase telemetry disable did not confirm."
-  cli_guard
-  out=$(timeout --kill-after=5 30 "$SUPABASE_BIN" telemetry status) || fail "supabase telemetry status failed."
+  out=$(cli_run 30 5 telemetry status) || fail "supabase telemetry status failed."
   [ "$out" = "Telemetry is disabled." ] || fail "supabase telemetry status does not report disabled."
   telemetry_guard
   note "Telemetry: disabled by environment (SUPABASE_TELEMETRY_DISABLED, DO_NOT_TRACK) and in CLI settings; status verified."
   ;;
 
 preflight)
+  # Every read is capped and any failure stops here. Worst case, each call running
+  # to its cap and SIGKILL: version 30+5, history, state and sessions 45+10 each,
+  # snapshot 75+10, migration list and dry run 90+15 each = 495 s, plus three
+  # integrity guards and shell work (under 15 s): about 510 s, inside the step's 660 s.
   command -v psql >/dev/null || fail "psql is not installed on the runner."
-  cli_guard
   telemetry_guard
-  [ "$(timeout --kill-after=5 30 "$SUPABASE_BIN" --version)" = "$CLI_VERSION" ] || fail "Supabase CLI is not version $CLI_VERSION."
+  [ "$(cli_run 30 5 --version)" = "$CLI_VERSION" ] || fail "Supabase CLI is not version $CLI_VERSION."
 
-  before=$(history) || fail "could not read the hosted migration history."
+  before=$(history 45) || fail "could not read the hosted migration history."
   printf '%s\n' "$before" >"$work/history-before.txt"
   [ "$before" = "$PRIOR_HISTORY" ] ||
     fail "hosted history is not exactly the 4 expected migrations: $(printf '%s' "$before" | cut -d'|' -f1 | paste -sd ' ' -)."
   note "Hosted history before: $(printf '%s' "$before" | paste -sd ' ' - | sed 's/|/ /g')."
 
-  state=$(s3_state) || fail "could not read the schema state."
+  state=$(s3_state 45) || fail "could not read the schema state."
   [ "$state" = "0" ] || fail "$state of $S3_OBJECTS S3 objects already exist; the database is not in the pre-S3 state."
   note "Schema: none of the $S3_OBJECTS S3 objects exist."
 
-  probe=$(sessions) || fail "could not read session visibility."
+  probe=$(sessions 45) || fail "could not read session visibility."
   if [ "$(cut -d'|' -f1,2,4 <<<"$probe")" = "t|t|0" ]; then
     note "Session visibility: full. A failed push can be classified as not applied once stable."
   else
     note "Session visibility: limited ($probe). A failed or interrupted push will be reported UNCERTAIN, never NOT APPLIED."
   fi
 
-  snapshot before || fail "could not record the pre-migration snapshot."
+  snapshot before 75 || fail "could not record the pre-migration snapshot."
   paths=$(awk -F'|' '$1 == "creative_paths" {print $2}' "$work/snapshot-before.txt")
   [ "$paths" = "$EXPECTED_CREATIVE_PATHS" ] ||
     fail "expected $EXPECTED_CREATIVE_PATHS creative paths, found ${paths:-none}; this is not the expected development database."
   [ "$(wc -l <"$work/snapshot-before.txt")" -eq 13 ] || fail "the snapshot does not cover the 13 expected tables."
   note "Records before: $(cut -d'|' -f1,2 "$work/snapshot-before.txt" | sed 's/|/=/' | paste -sd ' ' -)."
 
-  supabase_cli 120 migration list >"$work/list.json" 2>"$work/list.err" ||
+  supabase_cli 90 migration list >"$work/list.json" ||
     fail "supabase migration list failed (exit $?)."
   pending=$(jq -r '[.migrations[] | select(.remote == "") | .local] | join(" ")' "$work/list.json")
   remote=$(jq -r '[.migrations[] | select(.remote != "") | .remote] | join(" ")' "$work/list.json")
@@ -245,7 +331,7 @@ preflight)
     fail "CLI remote history does not match the 4 local prior migrations."
   note "CLI migration list: 4 applied, pending only \`$S3_VERSION\`."
 
-  supabase_cli 120 db push --dry-run >"$work/dry-run.json" 2>"$work/dry-run.err" ||
+  supabase_cli 90 db push --dry-run >"$work/dry-run.json" ||
     fail "supabase db push --dry-run failed (exit $?)."
   jq -e --arg f "$(basename "$MIGRATION")" \
     '.dryRun == true and .migrations == [$f] and (.seeds // []) == [] and (.roles // []) == []' \
@@ -258,9 +344,8 @@ apply)
   push_timeout=$(bounded PUSH_TIMEOUT_SECONDS 600 10 600)
   echo "attempted=true" >>"$GITHUB_OUTPUT"
   rc=0
-  supabase_cli "$push_timeout" db push --yes >"$work/push.json" 2>"$work/push.err" || rc=$?
+  supabase_cli "$push_timeout" db push --yes >"$work/push.json" || rc=$?
   echo "exit_code=$rc" >>"$GITHUB_OUTPUT"
-  cat "$work/push.err"
   note "supabase db push ran once and exited with status $rc."
   [ "$rc" -eq 0 ] || exit "$rc"
   ;;
@@ -316,7 +401,8 @@ classify)
       clean=0
       echo "Observation $observations: a read-only query failed."
     else
-      echo "Observation $observations: S3 history rows $(printf '%s\n' "$after" | grep -c "^$S3_VERSION|" || true), S3 objects $state of $S3_OBJECTS, sessions visible|own|relevant|hidden = $probe."
+      printf 'Observation %s: S3 history rows %s, S3 objects %s of %s, sessions visible|own|relevant|hidden = %s.\n' \
+        "$observations" "$(printf '%s\n' "$after" | grep -c "^$S3_VERSION|" || true)" "$state" "$S3_OBJECTS" "$probe" | show_untrusted
       if [ "$after" = "$expected_after" ] && [ "$state" = "$S3_OBJECTS" ]; then
         printf '%s\n' "$after" >"$work/history-after.txt"
         uncertain "History and schema show S3 applied, but the push did not report success."
@@ -348,7 +434,7 @@ validate)
   # Two reads capped at 90 s each (killed 10 s later at most): 200 s, inside the
   # step's 240 s limit.
   psql_file "$here/validate.sql" 90 >"$work/validate.txt" || fail "the validation query failed."
-  cat "$work/validate.txt"
+  show_untrusted <"$work/validate.txt"
   passed=$(grep -c '^PASS|' "$work/validate.txt" || true)
   total=$(wc -l <"$work/validate.txt")
   {
@@ -378,7 +464,7 @@ tests)
     declared=$(sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' "$out" | head -1)
     note "$name: $ok/${declared:-?} passed, $not_ok failed, psql exit $rc."
     if [ "$rc" -ne 0 ] || [ "$declared" != "$plan" ] || [ "$ok" -ne "$plan" ] || [ "$not_ok" -ne 0 ]; then
-      grep -E '^(not ok|# |psql:.*ERROR)' "$out" | head -20 || true
+      { grep -E '^(not ok|# |psql:.*ERROR)' "$out" || true; } | head -20 | show_untrusted
       fail "$name expected $plan/$plan."
     fi
   done
@@ -389,7 +475,7 @@ tests)
   ;;
 
 *)
-  echo "Unknown subcommand: $step" >&2
+  printf 'Unknown subcommand: %s\n' "$step" | show_untrusted
   exit 2
   ;;
 esac

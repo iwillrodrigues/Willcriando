@@ -6,7 +6,8 @@ Accepts exactly one form, matched on the raw string before any decoding:
   postgresql://postgres.anhaonrifwakoekksopv:<password>@aws-<n>-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require
 
 The password may only use unreserved characters and %XX escapes; once decoded
-it must be valid UTF-8 without control, format or whitespace characters. The
+it must be valid UTF-8 of at least 12 code points (the value every tool uses
+and the runner masks), without control, format or whitespace characters. The
 accepted string is then parsed again by urllib and by libpq's own parser
 (PQconninfoParse), and all three readings must agree on one host, port, user,
 database and sslmode, with no other option set. PG* environment variables
@@ -28,6 +29,8 @@ REF = "anhaonrifwakoekksopv"
 USER = f"postgres.{REF}"
 HOST = r"aws-[0-9]{1,2}-us-west-2\.pooler\.supabase\.com"
 PASSWORD = r"(?:[A-Za-z0-9._~-]|%[0-9A-Fa-f]{2}){12,512}"
+# Counted after percent decoding: 12 escapes may decode to only 3 code points.
+MIN_DECODED_PASSWORD = 12
 FORM = re.compile(rf"postgresql://postgres\.{REF}:(?P<pw>{PASSWORD})@(?P<host>{HOST}):5432/postgres\?sslmode=require")
 # Variables libpq or pgx read as defaults or overrides. PGSSLMODE and
 # PGCONNECT_TIMEOUT are allowed with fixed safe values only.
@@ -115,6 +118,8 @@ def main():
         password = unquote(m.group("pw"), errors="strict")
     except UnicodeDecodeError:
         reject("password-encoding")
+    if len(password) < MIN_DECODED_PASSWORD:
+        reject("password-too-short")
     if any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Zs") or c.isspace() for c in password):
         reject("password-control-or-space")
 

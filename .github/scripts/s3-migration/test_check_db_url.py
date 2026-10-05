@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import unittest
+from urllib.parse import unquote
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CHECK = os.path.join(HERE, "check_db_url.py")
@@ -170,6 +171,45 @@ class CheckDbUrl(unittest.TestCase):
                 for mask in sorted(masks, key=len, reverse=True):
                     text = text.replace(mask, "***")
                 self.assertNotIn(password, text)
+
+    def test_password_length_counts_decoded_code_points(self):
+        # W4: the 12-atom form allows 12 escapes that decode to 3 code points; the
+        # minimum applies to the decoded value, which is what tools use and the runner masks.
+        emoji, e_acute, cjk = "%F0%9F%98%80", "%C3%A9", "%E4%B8%AD"
+        cases = {
+            "literal ASCII, 11": ("Abcdefghijk", "form"),
+            "literal ASCII, 12": ("Abcdefghijkl", None),
+            "encoded ASCII, 11": ("%41" * 11, "form"),
+            "encoded ASCII, 12": ("%41" * 12, None),
+            "literal non-ASCII": ("Abcdéfghijkl", "form"),
+            "emoji, 3 code points": (emoji * 3, "password-too-short"),
+            "emoji, 4 code points": (emoji * 4, "password-too-short"),
+            "emoji, 11 code points": (emoji * 11, "password-too-short"),
+            "emoji, 11 plus one ASCII": (emoji * 11 + "A", None),
+            "emoji, 12 code points": (emoji * 12, None),
+            "2-byte, 11 code points": (e_acute * 11, "password-too-short"),
+            "2-byte, 12 code points": (e_acute * 12, None),
+            "3-byte, 4 code points": (cjk * 4, "password-too-short"),
+            "3-byte, 12 code points": (cjk * 12, None),
+            "mixed, 11 code points": ("Ab" + e_acute * 3 + emoji * 3 + "%25%25%25", "password-too-short"),
+            "mixed, 12 code points": ("Abc" + e_acute * 3 + emoji * 3 + "%25%25%25", None),
+        }
+        for name, (password, reason) in cases.items():
+            with self.subTest(name):
+                url = GOOD.replace(PW, password)
+                result = run(url)
+                self.assert_clean_output(result, url)
+                decoded = unquote(password, errors="strict")
+                if reason == "password-too-short":
+                    self.assertLess(len(decoded), 12)
+                if reason is None:
+                    self.assertEqual((result.returncode, result.stderr), (0, ""))
+                    self.assertGreaterEqual(len(decoded), 12)
+                    masks = registered_masks(result.stdout)
+                    self.assertIn(password, masks)
+                    self.assertIn(decoded, masks)
+                else:
+                    self.assertEqual((result.returncode, result.stderr), (1, f"rejected: {reason}\n"))
 
     def test_missing_variable(self):
         result = run(None)

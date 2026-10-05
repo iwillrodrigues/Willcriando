@@ -43,8 +43,8 @@ env:
 jobs:
   migrate:
     runs-on: ubuntu-24.04
-    # Above the sum of the step timeouts, so a step limit always fires first.
-    timeout-minutes: 70
+    # Above the sum of the step timeouts (69 min), so a step limit always fires first.
+    timeout-minutes: 80
     environment: willcriando-dev
     steps:
       - name: Confirm target
@@ -89,12 +89,15 @@ jobs:
         timeout-minutes: 4
         run: bash .github/scripts/s3-migration/run.sh install-cli
 
+      # Three CLI calls at 30 s plus 5 s to SIGKILL = 105 s, plus three integrity
+      # guards and shell work (under 10 s): at most about 115 s of 180 s.
       - name: Disable and verify CLI telemetry
-        timeout-minutes: 2
+        timeout-minutes: 3
         run: bash .github/scripts/s3-migration/run.sh telemetry
 
+      # Every read capped: at most about 510 s of 660 s (arithmetic in run.sh preflight).
       - name: Preflight (read-only)
-        timeout-minutes: 6
+        timeout-minutes: 11
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: bash .github/scripts/s3-migration/run.sh preflight
