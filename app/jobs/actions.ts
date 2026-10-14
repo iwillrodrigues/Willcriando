@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
 import { dbErrorMessage } from "@/lib/errors";
+import { composeBriefing, directionSchema, splitBriefing, type Direction } from "@/lib/flow/direction";
+import { getOwnJob } from "@/lib/jobs/queries";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { briefingSchema, fieldErrors, jobIdSchema, jobTitleSchema } from "@/lib/validation";
+import { briefingSchema, fieldErrors, jobTitleSchema } from "@/lib/validation";
 
 export type CreateJobState = { status: "idle" | "error"; message?: string; title?: string };
 
@@ -32,19 +34,16 @@ export type SaveBriefingState = {
   savedAt?: string;
 };
 
-export async function saveBriefing(_prev: SaveBriefingState, formData: FormData): Promise<SaveBriefingState> {
-  const jobId = String(formData.get("jobId") ?? "");
-  await requireUser(`/jobs/${encodeURIComponent(jobId)}`);
-
-  if (!jobIdSchema.safeParse(jobId).success) {
-    return { status: "error", message: "Job não encontrado ou sem acesso." };
-  }
-  const parsed = briefingSchema.safeParse(String(formData.get("content") ?? ""));
+/**
+ * Appends a revision through the database function, which checks ownership,
+ * numbers the revision under a row lock and appends it. Existing revisions are
+ * never changed.
+ */
+async function appendRevision(jobId: string, content: string): Promise<SaveBriefingState> {
+  const parsed = briefingSchema.safeParse(content);
   if (!parsed.success) return { status: "error", message: fieldErrors(parsed.error).form };
 
   const supabase = await createSupabaseServerClient();
-  // The database function checks ownership, numbers the revision under a row
-  // lock and appends it. Existing revisions are never changed.
   const { data, error } = await supabase
     .rpc("save_briefing_revision", { p_job_id: jobId, p_content: parsed.data })
     .single<{ revision_number: number; created_at: string }>();
@@ -53,4 +52,47 @@ export async function saveBriefing(_prev: SaveBriefingState, formData: FormData)
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/jobs");
   return { status: "saved", revisionNumber: data.revision_number, savedAt: data.created_at };
+}
+
+/** Saves the brief text. A direction adjusted by the creative is carried over unchanged. */
+export async function saveBriefing(_prev: SaveBriefingState, formData: FormData): Promise<SaveBriefingState> {
+  const jobId = String(formData.get("jobId") ?? "");
+  const user = await requireUser(`/jobs/${encodeURIComponent(jobId)}`);
+
+  const job = await getOwnJob(user.id, jobId);
+  if (!job) return { status: "error", message: "Job não encontrado ou sem acesso." };
+  const brief = String(formData.get("content") ?? "");
+  const parsed = briefingSchema.safeParse(brief);
+  if (!parsed.success) return { status: "error", message: fieldErrors(parsed.error).form };
+
+  const { direction } = splitBriefing(job.currentRevision?.content ?? "");
+  return appendRevision(jobId, composeBriefing(brief, direction));
+}
+
+/**
+ * Saves the direction as the creative adjusted it, or removes the adjustment.
+ * Either way the result is a new briefing revision with the same brief text.
+ */
+export async function saveDirection(_prev: SaveBriefingState, formData: FormData): Promise<SaveBriefingState> {
+  const jobId = String(formData.get("jobId") ?? "");
+  const user = await requireUser(`/jobs/${encodeURIComponent(jobId)}`);
+
+  const job = await getOwnJob(user.id, jobId);
+  if (!job) return { status: "error", message: "Job não encontrado ou sem acesso." };
+  if (!job.currentRevision) return { status: "error", message: "Salve o briefing antes de ajustar a direção." };
+
+  let direction: Direction | null = null;
+  if (formData.get("intent") !== "clear") {
+    const parsed = directionSchema.safeParse({
+      challenge: String(formData.get("challenge") ?? ""),
+      audience: String(formData.get("audience") ?? ""),
+      tension: String(formData.get("tension") ?? ""),
+      human_truth: String(formData.get("human_truth") ?? ""),
+    });
+    if (!parsed.success) return { status: "error", message: "Preencha os quatro campos, com até 800 caracteres cada." };
+    direction = parsed.data;
+  }
+
+  const { brief } = splitBriefing(job.currentRevision.content);
+  return appendRevision(jobId, composeBriefing(brief, direction));
 }

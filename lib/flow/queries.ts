@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { AnalysisOutput, PresentationContent } from "@/lib/ai/schemas";
+import type { CatalogPath } from "@/lib/flow/catalog-path";
 import { DataAccessError, getOwnJob, type JobDetail } from "@/lib/jobs/queries";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { jobIdSchema } from "@/lib/validation";
@@ -14,21 +15,7 @@ import { jobIdSchema } from "@/lib/validation";
 export type SelectionOrigin = "recommended" | "manual" | "random";
 export type GenerationStatus = "pending" | "succeeded" | "failed";
 
-/**
- * A catalog node. editorial_code is the visible code ("9.3"); path_number is
- * only the internal order. Group headers (selectable false) are shown for
- * orientation but never recommended, drawn or applied.
- */
-export type CatalogPath = {
-  id: string;
-  path_number: number;
-  editorial_code: string;
-  selectable: boolean;
-  title: string;
-  section: string | null;
-  content: string;
-  prompt_text: string | null;
-};
+export type { CatalogPath };
 
 export type Catalog = { snapshotId: string; importedAt: string; paths: CatalogPath[] } | null;
 
@@ -100,6 +87,7 @@ export type Concept = {
   is_finalist: boolean;
   created_at: string;
   path_title: string | null;
+  path_code: string | null;
 };
 
 export type Presentation = {
@@ -116,11 +104,19 @@ export type JobFlow = {
   job: JobDetail;
   analysis: Analysis | null;
   analysisRequest: RequestSummary | null;
+  /** The active selection: the newest explicit choice. */
   selection: Selection | null;
+  /** Every choice of the job, newest first, so each concept can show where it came from. */
+  selections: Selection[];
   conceptRequest: RequestSummary | null;
+  /** Concept generation runs of the job, by request id. */
+  conceptRuns: Record<string, RequestSummary>;
   concepts: Concept[];
   finalists: Concept[];
+  /** The newest presentation version. */
   presentation: Presentation | null;
+  /** Every presentation version, newest first. Each generation is a new version. */
+  presentations: Presentation[];
   presentationRequest: RequestSummary | null;
 };
 
@@ -183,17 +179,15 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
     }
   }
 
-  // Active selection: the most recent explicit choice.
-  const { data: sel, error: selError } = await supabase
+  // Every explicit choice, newest first. The first one is the active selection.
+  const { data: selRows, error: selError } = await supabase
     .from("path_selections")
     .select(
       `id, origin, created_at, briefing_revision_id, recommendation_id,
        briefing_revisions (revision_number), creative_paths (${PATH_COLUMNS})`,
     )
     .eq("job_id", jobId)
-    .order("choice_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("choice_order", { ascending: false });
   if (selError) throw new DataAccessError();
   type SelRow = {
     id: string;
@@ -204,18 +198,16 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
     briefing_revisions: { revision_number: number };
     creative_paths: CatalogPath;
   };
-  const selRow = sel as unknown as SelRow | null;
-  const selection: Selection | null = selRow
-    ? {
-        id: selRow.id,
-        origin: selRow.origin,
-        created_at: selRow.created_at,
-        briefing_revision_id: selRow.briefing_revision_id,
-        revision_number: selRow.briefing_revisions.revision_number,
-        recommendation_id: selRow.recommendation_id,
-        path: selRow.creative_paths,
-      }
-    : null;
+  const selections: Selection[] = ((selRows ?? []) as unknown as SelRow[]).map((row) => ({
+    id: row.id,
+    origin: row.origin,
+    created_at: row.created_at,
+    briefing_revision_id: row.briefing_revision_id,
+    revision_number: row.briefing_revisions.revision_number,
+    recommendation_id: row.recommendation_id,
+    path: row.creative_paths,
+  }));
+  const selection = selections[0] ?? null;
 
   let conceptRequest: RequestSummary | null = null;
   let concepts: Concept[] = [];
@@ -238,18 +230,30 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
   const { data: conceptRows, error: conceptsError } = await supabase
     .from("concepts")
     .select(
-      "id, generation_request_id, selection_id, seq, ai_title, ai_line, ai_body, title, line, body, edited_at, is_finalist, created_at, creative_paths (title)",
+      "id, generation_request_id, selection_id, seq, ai_title, ai_line, ai_body, title, line, body, edited_at, is_finalist, created_at, creative_paths (title, editorial_code)",
     )
     .eq("job_id", jobId)
     .order("created_at", { ascending: false })
     .order("seq", { ascending: true });
   if (conceptsError) throw new DataAccessError();
-  type ConceptRow = Omit<Concept, "path_title"> & { creative_paths: { title: string } | null };
+  type ConceptRow = Omit<Concept, "path_title" | "path_code"> & {
+    creative_paths: { title: string; editorial_code: string } | null;
+  };
   concepts = ((conceptRows ?? []) as unknown as ConceptRow[]).map(({ creative_paths, ...rest }) => ({
     ...rest,
     path_title: creative_paths?.title ?? null,
+    path_code: creative_paths?.editorial_code ?? null,
   }));
   const finalists = concepts.filter((c) => c.is_finalist);
+
+  // The runs that produced those concepts: model, prompt version and time.
+  const conceptRuns: Record<string, RequestSummary> = {};
+  const runIds = [...new Set(concepts.map((c) => c.generation_request_id))];
+  if (runIds.length > 0) {
+    const { data: runs, error: runsError } = await supabase.from("generation_requests").select(REQUEST_COLUMNS).in("id", runIds);
+    if (runsError) throw new DataAccessError();
+    for (const run of (runs ?? []) as RequestSummary[]) conceptRuns[run.id] = run;
+  }
 
   const { data: presReq, error: presReqError } = await supabase
     .from("generation_requests")
@@ -261,27 +265,38 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
     .maybeSingle();
   if (presReqError) throw new DataAccessError();
 
-  const { data: pres, error: presError } = await supabase
+  const { data: presRows, error: presError } = await supabase
     .from("presentations")
     .select("id, concept_ids, ai_content, content, edited_at, created_at, generation_request_id")
     .eq("job_id", jobId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
   if (presError) throw new DataAccessError();
-  let presentation: Presentation | null = null;
-  if (pres) {
-    const { data: r, error } = await supabase.from("generation_requests").select(REQUEST_COLUMNS).eq("id", pres.generation_request_id).single();
+  let presentations: Presentation[] = [];
+  if (presRows && presRows.length > 0) {
+    const { data: presRuns, error } = await supabase
+      .from("generation_requests")
+      .select(REQUEST_COLUMNS)
+      .in(
+        "id",
+        presRows.map((p) => p.generation_request_id),
+      );
     if (error) throw new DataAccessError();
-    presentation = {
-      id: pres.id,
-      concept_ids: pres.concept_ids,
-      ai_content: pres.ai_content as PresentationContent,
-      content: pres.content as PresentationContent,
-      edited_at: pres.edited_at,
-      created_at: pres.created_at,
-      request: r as RequestSummary,
-    };
+    const runById = new Map(((presRuns ?? []) as RequestSummary[]).map((r) => [r.id, r]));
+    presentations = presRows.flatMap((pres) => {
+      const request = runById.get(pres.generation_request_id);
+      if (!request) return [];
+      return [
+        {
+          id: pres.id,
+          concept_ids: pres.concept_ids,
+          ai_content: pres.ai_content as PresentationContent,
+          content: pres.content as PresentationContent,
+          edited_at: pres.edited_at,
+          created_at: pres.created_at,
+          request,
+        },
+      ];
+    });
   }
 
   return {
@@ -289,10 +304,13 @@ export async function getJobFlow(ownerId: string, jobId: string): Promise<JobFlo
     analysis,
     analysisRequest,
     selection,
+    selections,
     conceptRequest,
+    conceptRuns,
     concepts,
     finalists,
-    presentation,
+    presentation: presentations[0] ?? null,
+    presentations,
     presentationRequest: presReq as RequestSummary | null,
   };
 }

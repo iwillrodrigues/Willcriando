@@ -77,7 +77,7 @@ export async function generatePresentation(_prev: FlowActionState, formData: For
   return generate("presentation", formData);
 }
 
-/** Draws a path (a proposal only) and opens the explorer to confirm it. */
+/** Draws a path (a proposal only) and shows it in the workspace, waiting for confirmation. */
 export async function drawRandomPath(formData: FormData): Promise<void> {
   const jobId = field(formData, "jobId");
   await requireUser(jobPath(jobId));
@@ -86,9 +86,9 @@ export async function drawRandomPath(formData: FormData): Promise<void> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("draw_random_path", { p_job_id: jobId }).single<{ id: string }>();
   if (error || !data) {
-    redirect(`${jobPath(jobId)}/caminhos?erro=${encodeURIComponent(dbErrorMessage(error))}#sorteio`);
+    redirect(`${jobPath(jobId)}?modo=sorteio&erro=${encodeURIComponent(dbErrorMessage(error))}#caminho`);
   }
-  redirect(`${jobPath(jobId)}/caminhos?sorteio=${data.id}#sorteio`);
+  redirect(`${jobPath(jobId)}?modo=sorteio&sorteio=${data.id}#caminho`);
 }
 
 const selectionInput = z.object({
@@ -123,7 +123,8 @@ export async function selectPath(_prev: FlowActionState, formData: FormData): Pr
   if (error) return { status: "error", message: dbErrorMessage(error) };
 
   revalidatePath(jobPath(parsed.data.jobId));
-  redirect(`${jobPath(parsed.data.jobId)}#caminho`);
+  // The next moment: develop ideas with the chosen path.
+  redirect(`${jobPath(parsed.data.jobId)}#ideias`);
 }
 
 export async function saveConcept(_prev: FlowActionState, formData: FormData): Promise<FlowActionState> {

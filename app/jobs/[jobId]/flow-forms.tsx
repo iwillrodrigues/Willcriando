@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import type { PresentationContent } from "@/lib/ai/schemas";
 
 import styles from "../../ui.module.css";
+import ws from "./workspace.module.css";
 import {
   saveConcept,
   savePresentation,
@@ -111,19 +112,23 @@ export type ConceptView = {
   is_finalist: boolean;
 };
 
-export function ConceptCard({ jobId, concept, pathTitle }: { jobId: string; concept: ConceptView; pathTitle: string | null }) {
+/**
+ * One idea. AI text, the creative's edits and the finalist mark are labeled
+ * apart. Dismissing only hides the card on this device; finalists cannot be
+ * dismissed until they are taken out of the finalists.
+ */
+export function ConceptCard({ jobId, concept, onDismiss }: { jobId: string; concept: ConceptView; onDismiss?: () => void }) {
   const [editing, setEditing] = useState(false);
   const [saveState, saveAction, saving] = useActionState(saveConcept, idle);
   const [finalistState, finalistAction, marking] = useActionState(setFinalist, idle);
   const edited = concept.edited_at != null;
 
   return (
-    <article className={`${styles.item} ${concept.is_finalist ? styles.itemActive : ""}`}>
+    <article className={`${ws.concept} ${concept.is_finalist ? ws.conceptFinalist : ""}`}>
       <div className={styles.row}>
-        <span className={`${styles.badge} ${styles.badgeAi}`}>Gerado por IA</span>
+        <span className={`${styles.badge} ${styles.badgeAi}`}>IA</span>
         {edited && <span className={`${styles.badge} ${styles.badgeUser}`}>Editado por você</span>}
-        {concept.is_finalist && <span className={`${styles.badge} ${styles.badgeUser}`}>Finalista (sua escolha)</span>}
-        {pathTitle && <span className={styles.muted}>Caminho: {pathTitle}</span>}
+        {concept.is_finalist && <span className={`${styles.badge} ${styles.badgeUser}`}>Finalista</span>}
       </div>
 
       {editing ? (
@@ -165,39 +170,40 @@ export function ConceptCard({ jobId, concept, pathTitle }: { jobId: string; conc
         </form>
       ) : (
         <>
-          <h3>{concept.title}</h3>
-          <p className={styles.prose}>
-            <strong>{concept.line}</strong>
-          </p>
+          <h4 className={ws.conceptTitle}>{concept.title}</h4>
+          <p className={ws.conceptLine}>{concept.line}</p>
           <p className={styles.prose}>{concept.body}</p>
         </>
       )}
 
       {edited && !editing && (
         <details className={styles.details}>
-          <summary>Ver versão original da IA</summary>
-          <h3>{concept.ai_title}</h3>
-          <p className={styles.prose}>
-            <strong>{concept.ai_line}</strong>
-          </p>
+          <summary>Ver a versão original da IA</summary>
+          <h4 className={ws.conceptTitle}>{concept.ai_title}</h4>
+          <p className={ws.conceptLine}>{concept.ai_line}</p>
           <p className={styles.prose}>{concept.ai_body}</p>
         </details>
       )}
 
-      <div className={styles.row}>
+      <div className={ws.actions}>
+        <form action={finalistAction}>
+          <input type="hidden" name="jobId" value={jobId} />
+          <input type="hidden" name="conceptId" value={concept.id} />
+          <input type="hidden" name="value" value={concept.is_finalist ? "false" : "true"} />
+          <button className={concept.is_finalist ? styles.secondaryButton : styles.button} type="submit" disabled={marking}>
+            {marking ? "Salvando…" : concept.is_finalist ? "Tirar das finalistas" : "Marcar como finalista"}
+          </button>
+        </form>
         {!editing && (
           <button className={styles.secondaryButton} type="button" onClick={() => setEditing(true)}>
             Editar
           </button>
         )}
-        <form action={finalistAction}>
-          <input type="hidden" name="jobId" value={jobId} />
-          <input type="hidden" name="conceptId" value={concept.id} />
-          <input type="hidden" name="value" value={concept.is_finalist ? "false" : "true"} />
-          <button className={styles.secondaryButton} type="submit" disabled={marking}>
-            {marking ? "Salvando…" : concept.is_finalist ? "Tirar dos finalistas" : "Marcar como finalista"}
+        {onDismiss && !concept.is_finalist && !editing && (
+          <button className={styles.linkButton} type="button" onClick={onDismiss}>
+            Descartar
           </button>
-        </form>
+        )}
         {finalistState.status === "error" && (
           <span className={styles.error} role="alert">
             {finalistState.message}
@@ -208,29 +214,67 @@ export function ConceptCard({ jobId, concept, pathTitle }: { jobId: string; conc
   );
 }
 
-export function PresentationEditor(props: {
+/** A presentation version: read it as slides, or edit its text. */
+export function PresentationVersion(props: {
   jobId: string;
   presentationId: string;
   content: PresentationContent;
   conceptTitles: Record<string, string>;
 }) {
+  const [editing, setEditing] = useState(false);
   const [state, formAction, pending] = useActionState(savePresentation, idle);
+  const { content } = props;
+
+  if (!editing) {
+    return (
+      <div className={styles.stack}>
+        <div className={ws.deck}>
+          <section className={`${ws.slide} ${ws.slideCover}`}>
+            <span className={ws.slideLabel}>Abertura</span>
+            <h4 className={ws.slideHeading}>{content.title}</h4>
+            <p className={styles.prose}>{content.intro}</p>
+          </section>
+          {content.slides.map((slide, index) => (
+            <section key={slide.concept_id} className={ws.slide}>
+              <span className={ws.slideLabel}>
+                Ideia {index + 1}
+                {props.conceptTitles[slide.concept_id] ? ` · ${props.conceptTitles[slide.concept_id]}` : ""}
+              </span>
+              <h4 className={ws.slideHeading}>{slide.heading}</h4>
+              <p className={styles.prose}>{slide.text}</p>
+            </section>
+          ))}
+          <section className={ws.slide}>
+            <span className={ws.slideLabel}>Fechamento</span>
+            <p className={styles.prose}>{content.closing}</p>
+          </section>
+        </div>
+        <div className={styles.row}>
+          <button className={styles.secondaryButton} type="button" onClick={() => setEditing(true)}>
+            Editar esta versão
+          </button>
+          {state.status === "done" && <span className={styles.success}>{state.message}</span>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form className={styles.form} action={formAction}>
       <input type="hidden" name="jobId" value={props.jobId} />
       <input type="hidden" name="presentationId" value={props.presentationId} />
       <label className={styles.field}>
         Título
-        <input className={styles.input} name="title" defaultValue={props.content.title} maxLength={200} required />
+        <input className={styles.input} name="title" defaultValue={content.title} maxLength={200} required />
       </label>
       <label className={styles.field}>
         Abertura
-        <textarea className={`${styles.textarea} ${styles.smallTextarea}`} name="intro" defaultValue={props.content.intro} maxLength={2000} required />
+        <textarea className={`${styles.textarea} ${styles.smallTextarea}`} name="intro" defaultValue={content.intro} maxLength={2000} required />
       </label>
-      {props.content.slides.map((slide, index) => (
+      {content.slides.map((slide, index) => (
         <fieldset key={slide.concept_id} className={styles.item}>
           <legend className={styles.muted}>
-            Slide {index + 1} · conceito {props.conceptTitles[slide.concept_id] ?? "finalista"}
+            Ideia {index + 1} · {props.conceptTitles[slide.concept_id] ?? "finalista"}
           </legend>
           <input type="hidden" name="slideConceptId" value={slide.concept_id} />
           <label className={styles.field}>
@@ -245,11 +289,14 @@ export function PresentationEditor(props: {
       ))}
       <label className={styles.field}>
         Fechamento
-        <textarea className={`${styles.textarea} ${styles.smallTextarea}`} name="closing" defaultValue={props.content.closing} maxLength={2000} required />
+        <textarea className={`${styles.textarea} ${styles.smallTextarea}`} name="closing" defaultValue={content.closing} maxLength={2000} required />
       </label>
       <div className={styles.row}>
         <button className={styles.button} type="submit" disabled={pending}>
-          {pending ? "Salvando…" : "Salvar apresentação"}
+          {pending ? "Salvando…" : "Salvar esta versão"}
+        </button>
+        <button className={styles.linkButton} type="button" onClick={() => setEditing(false)} disabled={pending}>
+          Ver como slides
         </button>
         {state.status === "error" && (
           <span className={styles.error} role="alert">

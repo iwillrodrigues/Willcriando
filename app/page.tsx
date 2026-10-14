@@ -6,13 +6,11 @@ import { getSessionUser } from "@/lib/auth/session";
 import styles from "./page.module.css";
 
 const FLOW = [
-  "Briefing",
-  "Análise com IA",
-  "Explorar caminhos criativos",
-  "Aplicar o caminho escolhido",
-  "Gerar conceitos",
-  "Selecionar finalistas",
-  "Apresentação",
+  "Briefing: cole como chegou",
+  "Direção: a IA lê, você corrige",
+  "Caminho: pela IA, pelo catálogo ou pela sorte",
+  "Ideias: gere, edite, separe as finalistas",
+  "Apresentação: monte, edite, guarde as versões",
 ];
 
 export default async function Home() {
@@ -35,7 +33,7 @@ export default async function Home() {
         </Link>
       </p>
       <section className={styles.card} aria-labelledby="fluxo">
-        <h2 id="fluxo">Fluxo</h2>
+        <h2 id="fluxo">Cinco momentos</h2>
         <ol className={styles.flow}>
           {FLOW.map((step) => (
             <li key={step}>{step}</li>
@@ -43,10 +41,10 @@ export default async function Home() {
         </ol>
       </section>
       <section className={styles.card} aria-labelledby="estado">
-        <h2 id="estado">O que já funciona</h2>
+        <h2 id="estado">O que fica com você</h2>
         <p className={styles.status}>
-          Conta com e-mail e senha, criação de jobs e briefing salvo em revisões. Análise com IA, catálogo de caminhos,
-          conceitos, finalistas e apresentação ainda não foram implementados.
+          A IA lê e sugere; o catálogo dá o método; a escolha é sempre sua. Todo texto mostra de onde veio: IA, catálogo ou
+          você.
         </p>
       </section>
     </main>

@@ -24,6 +24,20 @@ Briefing → AI analysis → Explore creative paths → Apply selected path → 
 
 A creative path is an editorial method from the catalog, not a final concept. It can be selected three ways: recommended by AI, picked manually, or drawn at random. The user always makes the final choice. See ADR 0001 for the full decision.
 
+### Job workspace
+
+The job page (`app/jobs/[jobId]/`) groups the flow in five moments, with a rail to move between them:
+
+| Moment | What happens | Where it is stored |
+|---|---|---|
+| 1. Briefing | The brief, saved as immutable revisions | `briefing_revisions` |
+| 2. Direção | AI reading (summary, challenge, audience, tension, human truth). The creative can adjust challenge, audience, tension and human truth | AI reading: `briefing_analyses` (immutable). Adjustment: a new briefing revision with a marked block at the end (`lib/flow/direction.ts`), so later analyses and concept generations read it |
+| 3. Caminho | Three modes, chosen in the URL (`?modo=ia\|catalogo\|sorteio`): AI recommendations, catalog with search, random draw. Nothing is selected until the creative confirms | `path_selections` |
+| 4. Ideias | Concepts grouped by generation run, each run showing path, selection origin, briefing revision and model. Edit, finalist, dismiss and recover | Edits and finalists: `concepts`. Dismissed: this browser's `localStorage` only; nothing is deleted, finalists are never hidden |
+| 5. Apresentação | Each generation is a new version; every version stays readable and editable (`?versao=<id>`) | `presentations` |
+
+`/jobs/[jobId]/caminhos` redirects to moment 3, keeping a pending draw.
+
 ## Local setup
 
 Requirements: Node.js 22.12 or newer, and npm.
