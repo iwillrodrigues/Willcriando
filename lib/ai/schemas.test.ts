@@ -77,6 +77,37 @@ describe("analysis output", () => {
   });
 });
 
+describe("analysis output from a long briefing", () => {
+  const three = [
+    { path_code: "1.2", reasoning: "a" },
+    { path_code: "9.3", reasoning: "b" },
+    { path_code: "23.5", reasoning: "c" },
+  ];
+
+  it("keeps the first 10 constraints and questions instead of rejecting the reading", () => {
+    const many = Array.from({ length: 14 }, (_, i) => `Item ${i + 1}`);
+    const parsed = analysisStrictSchema(catalog).parse({ ...analysis(three), constraints: [...many, "  "], open_questions: many });
+    expect(parsed.constraints).toEqual(many.slice(0, 10));
+    expect(parsed.open_questions).toHaveLength(10);
+  });
+
+  it("reads path codes written the way people write them", () => {
+    const parsed = analysisStrictSchema(catalog).parse(
+      analysis([
+        { path_code: "Caminho 1.2", reasoning: "a" },
+        { path_code: " 9.3. ", reasoning: "b" },
+        { path_code: "23.5", reasoning: "c" },
+      ]),
+    );
+    expect(parsed.recommendations.map((r) => r.path_code)).toEqual(["1.2", "9.3", "23.5"]);
+  });
+
+  it("keeps the first three recommendations when the model sends more", () => {
+    const parsed = analysisStrictSchema(catalog).parse(analysis([...three, { path_code: "5", reasoning: "d" }]));
+    expect(parsed.recommendations).toHaveLength(3);
+  });
+});
+
 describe("concepts output", () => {
   const concept = { title: "Título", line: "Uma linha.", body: "Um corpo." };
 

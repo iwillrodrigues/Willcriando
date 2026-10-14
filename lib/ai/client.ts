@@ -95,8 +95,22 @@ export async function generateStructured<W extends z.ZodType, S extends z.ZodTyp
   if (response.parsed_output == null) throw new AiError("AI_INVALID_OUTPUT");
 
   const checked = input.strict.safeParse(response.parsed_output);
-  if (!checked.success) throw new AiError("AI_INVALID_OUTPUT");
+  if (!checked.success) {
+    console.error(JSON.stringify(validationFailureLog(checked.error)));
+    throw new AiError("AI_INVALID_OUTPUT");
+  }
   return { value: checked.data, servedModel: response.model };
+}
+
+/**
+ * Which rules a model answer broke: field paths and issue codes only. Never
+ * a value or a message, since both can quote the briefing or the answer.
+ */
+export function validationFailureLog(error: z.ZodError): { event: string; issues: string[] } {
+  return {
+    event: "ai_output_rejected",
+    issues: error.issues.slice(0, 10).map((issue) => `${issue.path.map((p) => (typeof p === "number" ? "#" : String(p))).join(".")}:${issue.code}`),
+  };
 }
 
 /** Accept only token-like provider values, so free text can never ride along. */

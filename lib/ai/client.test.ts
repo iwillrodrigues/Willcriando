@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { AiError, generateStructured, providerFailureLog } from "./client";
+import { AiError, generateStructured, providerFailureLog, validationFailureLog } from "./client";
 
 const API_KEY = "sk-ant-test-SECRET-KEY";
 const BRIEFING = "Briefing confidencial do cliente Fictício";
@@ -182,5 +182,18 @@ describe("providerFailureLog", () => {
 
   it("ignores errors that are not provider API errors", () => {
     expect(providerFailureLog(new SyntaxError(`Unexpected token in "${BRIEFING}"`))).toBeNull();
+  });
+});
+
+describe("validationFailureLog", () => {
+  it("names the broken fields and rules, never the values", () => {
+    const secret = "Briefing confidencial da marca X";
+    const result = z
+      .object({ constraints: z.array(z.string().max(5)), summary: z.string().min(1) })
+      .safeParse({ constraints: ["ok", secret], summary: "" });
+    expect(result.success).toBe(false);
+    const log = validationFailureLog(result.error!);
+    expect(log.issues).toEqual(["constraints.#:too_big", "summary:too_small"]);
+    expect(JSON.stringify(log)).not.toContain(secret);
   });
 });

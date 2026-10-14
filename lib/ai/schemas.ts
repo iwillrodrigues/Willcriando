@@ -29,35 +29,68 @@ export const analysisWireSchema = z.object({
   recommendations: z.array(z.object({ path_code: z.string(), reasoning: z.string() })),
 });
 
+export const ANALYSIS_LIST_MAX = 10;
+
+/**
+ * A list the model fills from the briefing (constraints, open questions).
+ * A long briefing can yield more items than the screen needs, so extra and
+ * blank items are dropped instead of rejecting the whole reading.
+ */
+const briefList = z
+  .array(z.string())
+  .transform((items) =>
+    items
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+      .slice(0, ANALYSIS_LIST_MAX),
+  )
+  .pipe(z.array(z.string().max(600)));
+
+/** "Caminho 9.3", "9.3." and " 9.3 " all mean the catalog code "9.3". */
+export function normalizePathCode(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^caminho\s+/i, "")
+    .replace(/\.$/, "")
+    .trim();
+}
+
 const analysisStrictBase = z.object({
   summary: text(1500),
   challenge: text(800),
   audience: text(800),
   tension: text(800),
   human_truth: text(800),
-  constraints: z.array(text(400)).max(10),
-  open_questions: z.array(text(400)).max(10),
-  recommendations: z
-    .array(z.object({ path_code: z.string().trim(), reasoning: text(600) }))
-    .length(RECOMMENDATION_COUNT),
+  constraints: briefList,
+  open_questions: briefList,
+  recommendations: z.array(z.object({ path_code: z.string().transform(normalizePathCode), reasoning: text(600) })),
 });
 
 export type AnalysisOutput = z.infer<typeof analysisStrictBase>;
 
-/** Strict check, including that every recommended code is a selectable path of the catalog. */
+/**
+ * Strict check: exactly RECOMMENDATION_COUNT distinct selectable paths of the
+ * catalog. Extra recommendations beyond that are dropped; fewer, repeated or
+ * unknown codes reject the reading.
+ */
 export function analysisStrictSchema(selectableCodes: ReadonlySet<string>) {
-  return analysisStrictBase.superRefine((value, ctx) => {
-    const seen = new Set<string>();
-    value.recommendations.forEach((rec, index) => {
-      if (!selectableCodes.has(rec.path_code)) {
-        ctx.addIssue({ code: "custom", message: "Recommended path is not in the catalog.", path: ["recommendations", index] });
+  return analysisStrictBase
+    .superRefine((value, ctx) => {
+      const seen = new Set<string>();
+      value.recommendations.slice(0, RECOMMENDATION_COUNT).forEach((rec, index) => {
+        if (!selectableCodes.has(rec.path_code)) {
+          ctx.addIssue({ code: "custom", message: "Recommended path is not in the catalog.", path: ["recommendations", index] });
+        }
+        if (seen.has(rec.path_code)) {
+          ctx.addIssue({ code: "custom", message: "Recommended path repeated.", path: ["recommendations", index] });
+        }
+        seen.add(rec.path_code);
+      });
+      if (value.recommendations.length < RECOMMENDATION_COUNT) {
+        ctx.addIssue({ code: "custom", message: "Too few recommendations.", path: ["recommendations"] });
       }
-      if (seen.has(rec.path_code)) {
-        ctx.addIssue({ code: "custom", message: "Recommended path repeated.", path: ["recommendations", index] });
-      }
-      seen.add(rec.path_code);
-    });
-  });
+    })
+    .transform((value) => ({ ...value, recommendations: value.recommendations.slice(0, RECOMMENDATION_COUNT) }));
 }
 
 // ---------------------------------------------------------------------------

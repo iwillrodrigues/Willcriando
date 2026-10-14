@@ -8,7 +8,7 @@
  */
 
 export const PROMPT_VERSIONS = {
-  analysis: "analysis-2026-10-01.2",
+  analysis: "analysis-2026-10-14.1",
   concepts: "concepts-2026-10-01.1",
   presentation: "presentation-2026-09-30.1",
 } as const;
@@ -64,8 +64,9 @@ export function analysisPrompt(briefing: string, catalog: readonly CatalogPathFo
     "audience: quem precisa ser tocado e o que já pensa hoje.",
     "tension: o conflito que a ideia precisa resolver.",
     "human_truth: a verdade humana que sustenta a ideia, dita em uma frase.",
-    "constraints: obrigatórios, restrições e limites citados no briefing.",
-    "open_questions: o que falta no briefing para decidir bem. Lista vazia se nada faltar.",
+    "constraints: os obrigatórios, restrições e limites mais importantes do briefing. No máximo 10 itens, uma frase curta cada. Agrupe itens parecidos.",
+    "open_questions: o que falta no briefing para decidir bem. No máximo 10 itens, uma frase curta cada. Lista vazia se nada faltar.",
+    "Limites: summary até 1.500 caracteres; challenge, audience, tension e human_truth até 800 caracteres cada.",
     "",
     `recommendations: exatamente 3 caminhos DIFERENTES do catálogo abaixo, do mais para o menos adequado.`,
     "Em path_code, use exatamente o código de um caminho do catálogo, como aparece no atributo codigo. Em reasoning, até 2 frases ligando o caminho a este briefing.",
