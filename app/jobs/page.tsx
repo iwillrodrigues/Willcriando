@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
 import { formatDateTime } from "@/lib/format";
@@ -7,6 +6,7 @@ import { listOwnJobs } from "@/lib/jobs/queries";
 
 import styles from "../ui.module.css";
 import { CreateJobForm } from "./create-job-form";
+import { JobRow } from "./job-row";
 
 export const metadata: Metadata = { title: "Meus jobs · Trilha" };
 
@@ -32,12 +32,7 @@ export default async function JobsPage() {
         ) : (
           <ul className={styles.list}>
             {jobs.map((job) => (
-              <li key={job.id}>
-                <Link className={styles.jobLink} href={`/jobs/${job.id}`}>
-                  <span className={styles.jobTitle}>{job.title}</span>
-                  <span className={styles.muted}>Atualizado em {formatDateTime(job.updated_at)}</span>
-                </Link>
-              </li>
+              <JobRow key={job.id} id={job.id} title={job.title} updatedLabel={formatDateTime(job.updated_at)} />
             ))}
           </ul>
         )}

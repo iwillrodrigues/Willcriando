@@ -8,7 +8,7 @@ import { dbErrorMessage } from "@/lib/errors";
 import { composeBriefing, directionSchema, splitBriefing, type Direction } from "@/lib/flow/direction";
 import { getOwnJob } from "@/lib/jobs/queries";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { briefingSchema, fieldErrors, jobTitleSchema } from "@/lib/validation";
+import { briefingSchema, fieldErrors, jobIdSchema, jobTitleSchema } from "@/lib/validation";
 
 export type CreateJobState = { status: "idle" | "error"; message?: string; title?: string };
 
@@ -95,4 +95,29 @@ export async function saveDirection(_prev: SaveBriefingState, formData: FormData
 
   const { brief } = splitBriefing(job.currentRevision.content);
   return appendRevision(jobId, composeBriefing(brief, direction));
+}
+
+export type DeleteJobState = { status: "idle" | "error"; message?: string };
+
+/**
+ * Deletes the job and everything in it, for good. The database function checks
+ * ownership and removes all of the job's rows in one transaction.
+ */
+export async function deleteJob(_prev: DeleteJobState, formData: FormData): Promise<DeleteJobState> {
+  await requireUser("/jobs");
+  const jobId = String(formData.get("jobId") ?? "");
+  if (!jobIdSchema.safeParse(jobId).success) return { status: "error", message: "Job não encontrado ou sem acesso." };
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("delete_job", { p_job_id: jobId });
+  if (error) {
+    // The function arrives with a migration; until it is applied, say so plainly.
+    if (error.code === "PGRST202") {
+      return { status: "error", message: "A exclusão ainda não foi ativada no banco deste ambiente." };
+    }
+    return { status: "error", message: dbErrorMessage(error) };
+  }
+
+  revalidatePath("/jobs");
+  redirect("/jobs");
 }

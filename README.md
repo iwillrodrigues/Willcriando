@@ -104,6 +104,7 @@ Access rules (enforced by the database):
 1. A user sees and changes only their own jobs.
 2. Briefing revisions are append-only; they are written only through `save_briefing_revision`, which checks ownership and numbers revisions under a row lock.
 3. The `anon` role has no access to application tables or functions.
+4. Nothing inside a job is deleted on its own. The owner can delete a whole job through `delete_job`, which removes the job and every row it owns in one transaction (migration `*_delete_job.sql`, tests in `supabase/tests/database/s3_delete_job.test.sql`). The catalog stays immutable.
 
 ## Catalog import (S2)
 
